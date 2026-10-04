@@ -74,6 +74,20 @@ brew install --cask TheBoredTeam/boring-notch/boring-notch
 - 使用控制项管理音乐播放。
 - 点击菜单栏中的星形图标，可自定义灵动岛。
 
+## 此 Fork 的改造
+
+本 Fork 基于 [TheBoredTeam/boring.notch](https://github.com/TheBoredTeam/boring.notch)，主要扩展了 AI Agent 会话和音乐控制：
+
+- **多来源 AI Agent 会话**：接入 Codex、WorkBuddy、DSH 和 MiMo Desktop，集中查看置顶会话、运行状态及最近回复，并支持历史消息分页。可单独启用各来源，调整会话刷新间隔、窗口字号和卡片排序。
+- **会话交互**：会话窗口按来源能力提供消息发送或打断；Codex、DSH 和 MiMo 支持发送与打断，WorkBuddy 支持发送。DSH、MiMo 和 WorkBuddy 的接入组件随应用提供安装或配对入口。
+- **新消息跟随**：收到新消息时，如果窗口原本已滚动到底部，就跟随显示最新内容；正在查看较早消息时保留当前位置。
+- **动画反馈**：加快图标状态切换动画，并缩短悬停反馈时间，让控制图标响应更及时。
+- **歌词显示**：按播放器优先使用对应歌词来源；改进 QQ 音乐的歌名、歌手、专辑和时长匹配，降低同名歌曲或翻唱导致的错配，无歌词时不显示无效占位内容。
+- **QQ 音乐和网易云音乐**：补充媒体来源识别，并支持喜欢歌曲及切换随机、单曲循环和列表循环。相关控制需要在 macOS 中授予辅助功能权限。
+- **来源图标**：MiMo Desktop 使用[小米汽车官网的车标图形](https://g-s1.xiaomiauto.com/xiaomiauto-com-global-assets/images/0815/icons/header/xiaomi-logo.svg)，DSH 使用 DeepSeek 标识。
+
+接入和实现细节见 [多来源 AI Agent 说明](docs/agent-providers.md)、[DSH 接入](docs/dsh-integration.md)、[MiMo Desktop 接入](docs/mimo-integration.md) 和 [WorkBuddy 接入](docs/workbuddy-integration.md)。
+
 ## 🗺️ 开发路线图
 
 - [x] 音乐播放实时动态 🎧

@@ -56,9 +56,10 @@ struct ContentView: View {
     private var currentNotchShape: NotchShape {
         NotchShape(
             topCornerRadius: topCornerRadius,
-            bottomCornerRadius: ((vm.notchState == .open) && Defaults[.cornerRadiusScaling])
-                ? cornerRadiusInsets.opened.bottom
-                : cornerRadiusInsets.closed.bottom
+            bottomCornerRadius: vm.notchState == .open && coordinator.currentView == .agent
+                ? agentOuterCornerRadius
+                : ((vm.notchState == .open) && Defaults[.cornerRadiusScaling])
+                    ? cornerRadiusInsets.opened.bottom : cornerRadiusInsets.closed.bottom
         )
     }
 
@@ -105,7 +106,8 @@ struct ContentView: View {
                         ? (cornerRadiusInsets.opened.top) : (cornerRadiusInsets.opened.bottom)
                         : cornerRadiusInsets.closed.bottom
                     )
-                    .padding([.horizontal, .bottom], vm.notchState == .open ? 12 : 0)
+                    .padding(.horizontal, vm.notchState == .open ? 12 : 0)
+                    .padding(.bottom, vm.notchState == .open ? (coordinator.currentView == .agent ? 6 : 12) : 0)
                     .background(alignment: .top) {
                         GeometryReader { geometry in
                             // Keep one opaque surface while playback expands or collapses.
@@ -137,7 +139,14 @@ struct ContentView: View {
                     .background {
                         CodexTaskPanelAnchor(isPresented:
                             vm.notchState == .open && coordinator.currentView == .agent
-                                && pinnedTaskService.selectedTaskID != nil)
+                                && pinnedTaskService.selectedTaskID != nil,
+                            sideInset: topCornerRadius,
+                            onOutsideClick: {
+                                pinnedTaskService.selectedTaskID = nil
+                                vm.close()
+                                coordinator.currentView = .home
+                                coordinator.openHomeAfterOutsideDismiss = true
+                            })
                     }
                     .conditionalModifier(true) { view in
                         return view
@@ -191,6 +200,24 @@ struct ContentView: View {
                             } else {
                                 vm.notchSize = expandedNotchSize(for: coordinator.currentView, hasPinnedTasks: !tasks.isEmpty)
                             }
+                        }
+                    }
+                    .onChange(of: coordinator.codexCompletionReminder) { _, reminder in
+                        guard reminder != nil, coordinator.codexTabEnabled,
+                              !vm.hideOnClosed else { return }
+                        hoverTask?.cancel()
+                        coordinator.openHomeAfterOutsideDismiss = false
+                        coordinator.currentView = .agent
+                        doOpen()
+                        // Keep the reminder visible long enough to read the cards.
+                        hoverTask = Task {
+                            try? await Task.sleep(for: .seconds(8))
+                            guard !Task.isCancelled,
+                                  coordinator.codexCompletionReminder == reminder,
+                                  coordinator.currentView == .agent,
+                                  pinnedTaskService.selectedTaskID == nil,
+                                  !vm.isMouseHovering(), !SharingStateManager.shared.preventNotchClose else { return }
+                            vm.close()
                         }
                     }
                     .onChange(of: coordinator.currentView) { _, newView in
@@ -342,6 +369,8 @@ struct ContentView: View {
 
     private var shouldShowCollapsedLyrics: Bool {
         guard showCollapsedLyrics,
+              Defaults[.enableLyrics],
+              musicManager.hasAvailableLyrics,
               vm.notchState == .closed,
               !vm.hideOnClosed,
               coordinator.musicLiveActivityEnabled,
@@ -812,13 +841,13 @@ private struct CollapsedLyricsView: View {
             }()
             let hasSyncedLyrics = !musicManager.syncedLyrics.isEmpty
             let line: String = {
-                if musicManager.isFetchingLyrics { return "正在加载歌词…" }
                 if hasSyncedLyrics { return musicManager.lyricLine(at: elapsed) }
-                return musicManager.currentLyrics.isEmpty ? "暂无歌词" : "暂无逐句歌词"
+                return musicManager.currentLyrics.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .replacingOccurrences(of: "\n", with: " ")
             }()
             Text(line)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(hasSyncedLyrics ? 0.86 : 0.45))
+                .foregroundStyle(musicManager.lyricsColor)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .padding(.horizontal, 14)

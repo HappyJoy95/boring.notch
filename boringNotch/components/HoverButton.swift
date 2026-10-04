@@ -12,7 +12,7 @@ struct HoverButton: View {
     var iconColor: Color = .primary
     var scale: Image.Scale = .medium
     var action: () -> Void
-    var contentTransition: ContentTransition = .symbolEffect;
+    var contentTransition: ContentTransition = .symbolEffect(.replace, options: .speed(2))
     
     @State private var isHovering = false
 
@@ -38,7 +38,7 @@ struct HoverButton: View {
         }
         .buttonStyle(PlainButtonStyle())
         .onHover { hovering in
-            withAnimation(.smooth(duration: 0.3)) {
+            withAnimation(.easeOut(duration: 0.12)) {
                 isHovering = hovering
             }
         }

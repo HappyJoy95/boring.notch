@@ -24,6 +24,21 @@ enum CodexPinnedTasksReader {
         return try JSONSerialization.data(withJSONObject: taskSnapshot(thread: thread, turns: turns))
     }
 
+    static func readHistory(_ threadID: String, cursor: String?) throws -> Data {
+        try validatePinnedThread(threadID)
+        guard (cursor?.count ?? 0) <= 4096 else { throw ReaderError.invalidThreadID }
+        let client = try CodexAppServerClient()
+        var params: [String: Any] = ["threadId": threadID, "limit": 8,
+            "sortDirection": "desc", "itemsView": "full"]
+        if let cursor, !cursor.isEmpty { params["cursor"] = cursor }
+        let response = try client.request("thread/turns/list", id: 2, params: params)
+        guard let result = response["result"] as? [String: Any],
+              let turns = result["data"] as? [[String: Any]] else { throw ReaderError.invalidResponse }
+        var page: [String: Any] = ["messages": latestMessages(in: turns)]
+        if let next = result["nextCursor"] as? String { page["nextCursor"] = next }
+        return try JSONSerialization.data(withJSONObject: page)
+    }
+
     static func validatePinnedThread(_ threadID: String) throws {
         guard !threadID.isEmpty, threadID.count <= 256 else { throw ReaderError.invalidThreadID }
         let client = try CodexAppServerClient()
@@ -114,8 +129,8 @@ enum CodexPinnedTasksReader {
         return ""
     }
 
-    private static func latestMessages(in turns: [[String: Any]]) -> [[String: String]] {
-        guard let turn = turns.first else { return [] }
+    private static func latestMessages(in turns: [[String: Any]]) -> [[String: Any]] {
+        return turns.reversed().flatMap { turn -> [[String: Any]] in
         let items = (turn["items"] as? [[String: Any]])
             ?? ((turn["turn"] as? [String: Any])?["items"] as? [[String: Any]])
             ?? []
@@ -131,13 +146,19 @@ enum CodexPinnedTasksReader {
             }
             let text = messageText(item).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return nil }
-            return [
-                "id": (item["id"] as? String) ?? "\(index)-\(role)",
+            var message: [String: Any] = [
+                "id": (item["id"] as? String) ?? "\(turn["id"] as? String ?? "turn")-\(index)-\(role)",
                 "role": role,
                 "text": String(text.prefix(2_000)),
                 "phase": (item["phase"] as? String) ?? "",
             ]
-        }.suffix(12).map { $0 }
+            if let startedAt = turn["startedAt"] as? NSNumber {
+                message["timelineTime"] = startedAt.doubleValue
+                message["timelineIndex"] = index
+            }
+            return message
+        }
+        }
     }
 
     private static func messageText(_ item: [String: Any]) -> String {
@@ -151,7 +172,7 @@ enum CodexPinnedTasksReader {
         return ""
     }
 
-    private static func displayStatus(thread: [String: Any], turns: [[String: Any]]) -> String {
+    static func displayStatus(thread: [String: Any], turns: [[String: Any]]) -> String {
         let status = thread["status"] as? [String: Any]
         let flags = status?["activeFlags"] as? [String] ?? []
         if flags.contains("waitingOnApproval") { return "waiting" }
@@ -162,7 +183,11 @@ enum CodexPinnedTasksReader {
             case "interrupted":
                 // Desktop can expose an interrupted turn while it is still attached to
                 // its live owner; completedAt/durationMs distinguish terminal history.
-                if latestTurn["completedAt"] == nil && latestTurn["durationMs"] == nil {
+                let completedAt = latestTurn["completedAt"]
+                let durationMs = latestTurn["durationMs"]
+                let hasCompletedAt = completedAt != nil && !(completedAt is NSNull)
+                let hasDuration = durationMs != nil && !(durationMs is NSNull)
+                if !hasCompletedAt && !hasDuration {
                     return "running"
                 }
                 return "interrupted"

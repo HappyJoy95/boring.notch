@@ -29,6 +29,10 @@ import Foundation
             precondition(result?.source == source)
             precondition(LyricsTimeline.parse(result?.text ?? "").first?.text == "测试歌词")
         }
+        let hwaa = LyricsSong(title: "화 (火花)", artist: "i-dle", album: "I burn", duration: 197)
+        let qqHwaa = try await LyricsService(session: URLSession(configuration: config)).lookup(song: hwaa, player: "com.tencent.QQMusicMac")
+        precondition(qqHwaa?.source == .qq, "Use the QQ result's lyrics when QQ returns a versioned title")
+        precondition(LyricsTimeline.parse(qqHwaa?.text ?? "").first?.text == "测试歌词")
         let requestsBeforeCache = LyricsFixtureProtocol.requestCount
         _ = try await service.lookup(song: song, player: "com.tencent.QQMusicMac")
         precondition(LyricsFixtureProtocol.requestCount == requestsBeforeCache)
@@ -53,6 +57,10 @@ import Foundation
             let qq = try await live.lookup(song: song, player: "com.tencent.QQMusicMac")
             precondition(qq?.source == .qq && !LyricsTimeline.parse(qq?.text ?? "").isEmpty)
             print("LIVE PASS: QQ source, timed lyrics")
+            let hwaaLive = LyricsSong(title: "화 (火花)", artist: "(G)I-DLE", album: "I burn", duration: 197)
+            let hwaaLyrics = try await live.lookup(song: hwaaLive, player: "com.tencent.QQMusicMac")
+            precondition(hwaaLyrics?.source == .qq && !LyricsTimeline.parse(hwaaLyrics?.text ?? "").isEmpty)
+            print("LIVE PASS: QQ HWAA versioned result, timed lyrics")
             let netSong = LyricsSong(title: "起风了", artist: "冯沁苑(买辣椒也用券)", album: "起风了", duration: 325.868)
             let net = try await live.lookup(song: netSong, player: "com.netease.163music")
             precondition(net?.source == .netease && !LyricsTimeline.parse(net?.text ?? "").isEmpty)
@@ -79,7 +87,11 @@ final class LyricsFixtureProtocol: URLProtocol {
         } else if Self.failPlatforms {
             client?.urlProtocol(self, didFailWithError: URLError(.timedOut)); return
         } else if path.contains("client_search") {
-            body = ["code": 0, "data": ["song": ["list": [["songmid": "qq-id", "songname": "晴天", "singer": [["name": "周杰伦"]], "albumname": "叶惠美", "interval": 269]]]]]
+            let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "w" }?.value ?? ""
+            let row: [String: Any] = query.contains("화")
+                ? ["songmid": "qq-id", "songname": "화(火花)(HWAA)", "singer": [["name": "(G)I-DLE ((여자)아이들)"]], "albumname": "I burn", "interval": 197]
+                : ["songmid": "qq-id", "songname": "晴天", "singer": [["name": "周杰伦"]], "albumname": "叶惠美", "interval": 269]
+            body = ["code": 0, "data": ["song": ["list": [row]]]]
         } else if path.contains("fcg_query_lyric") {
             precondition(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "songmid" }?.value == "qq-id")
             body = ["retcode": 0, "lyric": Data(lrc.utf8).base64EncodedString()]

@@ -56,7 +56,7 @@ class BatteryStatusViewModel: ObservableObject {
             print("🔌 Power source: \(isPluggedIn ? "Connected" : "Disconnected")")
             withAnimation {
                 self.isPluggedIn = isPluggedIn
-                self.statusText = isPluggedIn ? "Plugged In" : "Unplugged"
+                self.statusText = String(localized: isPluggedIn ? "Plugged In" : "Unplugged")
                 self.notifyImportanChangeStatus()
             }
 
@@ -71,7 +71,7 @@ class BatteryStatusViewModel: ObservableObject {
             self.notifyImportanChangeStatus()
             withAnimation {
                 self.isInLowPowerMode = isEnabled
-                self.statusText = "Low Power: \(self.isInLowPowerMode ? "On" : "Off")"
+                self.statusText = String(localized: self.isInLowPowerMode ? "Low Power: On" : "Low Power: Off")
             }
 
         case .isChargingChanged(let isCharging):
@@ -114,7 +114,7 @@ class BatteryStatusViewModel: ObservableObject {
             self.isInLowPowerMode = batteryInfo.isInLowPowerMode
             self.timeToFullCharge = batteryInfo.timeToFullCharge
             self.maxCapacity = batteryInfo.maxCapacity
-            self.statusText = batteryInfo.isPluggedIn ? "Plugged In" : "Unplugged"
+            self.statusText = String(localized: batteryInfo.isPluggedIn ? "Plugged In" : "Unplugged")
         }
     }
 

@@ -22,7 +22,7 @@ class MusicManager: ObservableObject {
     private var debounceIdleTask: Task<Void, Never>?
 
     // Helper to check if macOS has removed support for NowPlayingController
-    public private(set) var isNowPlayingDeprecated: Bool = false
+    @Published public private(set) var isNowPlayingDeprecated: Bool = false
     private let mediaChecker = MediaChecker()
 
     // Active controller
@@ -50,6 +50,16 @@ class MusicManager: ObservableObject {
     @Published var usingAppIconForArtwork: Bool = false
     @Published var currentLyrics: String = ""
     @Published var isFetchingLyrics: Bool = false
+    var hasAvailableLyrics: Bool {
+        syncedLyrics.contains { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            || !currentLyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var lyricsColor: Color {
+        Defaults[.playerColorTinting]
+            ? Color(nsColor: avgColor).ensureMinimumBrightness(factor: 0.6) : .gray
+    }
+
     @Published var syncedLyrics: [(time: Double, text: String)] = []
     @Published var canFavoriteTrack: Bool = false
     @Published var isFavoriteTrack: Bool = false
@@ -185,6 +195,7 @@ class MusicManager: ObservableObject {
     // MARK: - Update Methods
     @MainActor
     private func updateFromPlaybackState(_ state: PlaybackState) {
+        self.canFavoriteTrack = activeController?.supportsFavorite ?? false
         // Check for playback state changes (playing/paused)
         if state.isPlaying != self.isPlaying {
             NSLog("Playback state changed: \(state.isPlaying ? "Playing" : "Paused")")
@@ -343,6 +354,8 @@ class MusicManager: ObservableObject {
 
         Task { @MainActor in
             await controller.setFavorite(favorite)
+            // NowPlaying already applies the native reply and reconciles it.
+            if controller is NowPlayingController { return }
             try? await Task.sleep(for: .milliseconds(150))
             await controller.updatePlaybackInfo()
         }

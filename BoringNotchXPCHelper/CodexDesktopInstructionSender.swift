@@ -51,6 +51,40 @@ enum CodexDesktopInstructionSender {
               turnID(in: response) != nil else { throw SendError.protocolMismatch }
     }
 
+    static func interrupt(threadID: String) throws {
+        guard !threadID.isEmpty, threadID.count <= 256 else { throw SendError.invalidInput }
+        let socketPath = defaultSocketPath()
+        guard socketOwnedByCurrentUser(socketPath) else { throw SendError.unavailable }
+        let descriptor = try connect(to: socketPath)
+        defer { close(descriptor) }
+
+        // Initialize returns result.clientId; reject unexpected replies before
+        // any instruction is sent.
+        let initialized = try request(descriptor, method: "initialize", version: 0, params: [
+            "clientType": "boring-notch",
+        ], timeoutMs: 1_500)
+        guard let client = (initialized["result"] as? [String: Any])?["clientId"] as? String,
+              !client.isEmpty else { throw SendError.protocolMismatch }
+
+        let ownerResponse = try request(descriptor, method: "thread-owner-discovery", version: ownerDiscoveryVersion,
+            params: ["hostId": "local", "conversationId": threadID], sourceClientID: client)
+        guard let owner = ownerResponse["handledByClientId"] as? String, !owner.isEmpty, owner != client else {
+            throw SendError.ownerUnavailable
+        }
+
+        // Version 3 is the Desktop protocol for stopping the current turn
+        // without an expectedTurnId. user-stop also pauses a continuing goal.
+        let response = try request(descriptor, method: "thread-follower-interrupt-turn", version: 3,
+            params: ["conversationId": threadID, "mode": "user-stop"],
+            sourceClientID: client, targetClientID: owner)
+        guard response["handledByClientId"] as? String == owner,
+              let result = response["result"] as? [String: Any],
+              result["ok"] as? Bool == true else { throw SendError.protocolMismatch }
+        if let error = result["goalPauseError"] as? String {
+            throw NSError(domain: "CodexStop", code: 1, userInfo: [NSLocalizedDescriptionKey: error])
+        }
+    }
+
     private static func defaultSocketPath() -> String {
         let environment = ProcessInfo.processInfo.environment
         let home = environment["CODEX_HOME"] ?? ((environment["HOME"] ?? NSHomeDirectory()) + "/.codex")

@@ -51,6 +51,40 @@ enum LyricsMatching {
             return (candidate, albumBonus - (song.duration > 0 && candidate.duration > 0 ? delta : 5))
         }.max { $0.1 < $1.1 }?.0
     }
+
+    /// QQ's ranked results can contain the original recording before a cover.
+    /// Keep only candidates that agree with the player metadata, then rank by
+    /// title, album and runtime. QQ may append a version label or an alias to
+    /// the title, so allow one normalized title to contain the other.
+    static func bestPlayerMatch(_ candidates: [LyricsCandidate], for song: LyricsSong) -> LyricsCandidate? {
+        let title = normalized(song.title)
+        let artists = song.artist.components(separatedBy: CharacterSet(charactersIn: "/、,&;；＆"))
+            .map(normalized).filter { !$0.isEmpty }
+        guard !title.isEmpty, !artists.isEmpty else { return nil }
+
+        return candidates.enumerated().compactMap { index, candidate -> (LyricsCandidate, Double)? in
+            guard !candidate.id.isEmpty else { return nil }
+            let candidateTitle = normalized(candidate.title)
+            let names = candidate.artists.flatMap { artistNames($0) }
+            guard artists.allSatisfy({ names.contains($0) }) else { return nil }
+
+            let exactTitle = candidateTitle == title
+            let versionTitle = !candidateTitle.isEmpty && (candidateTitle.contains(title) || title.contains(candidateTitle))
+            let albumMatch = !song.album.isEmpty && normalized(song.album) == normalized(candidate.album)
+            let hasDurations = song.duration > 0 && candidate.duration > 0
+            let durationDelta = hasDurations ? abs(candidate.duration - song.duration) : 0
+            let durationLimit = max(12, song.duration * 0.08)
+            guard !hasDurations || durationDelta <= durationLimit else { return nil }
+            // An unrelated title is acceptable only when both album and runtime
+            // strongly identify it; this covers localized title aliases safely.
+            guard exactTitle || versionTitle || (albumMatch && hasDurations && durationDelta <= 3) else { return nil }
+
+            let titleScore = exactTitle ? 100.0 : (versionTitle ? 65.0 : 35.0)
+            let albumScore = albumMatch ? 25.0 : 0
+            let durationScore = hasDurations ? -durationDelta * 2 : 0
+            return (candidate, titleScore + albumScore + durationScore - Double(index) * 0.001)
+        }.max { $0.1 < $1.1 }?.0
+    }
 }
 
 enum LyricsTimeline {
@@ -191,7 +225,10 @@ actor LyricsService {
                 return LyricsCandidate(id: ($0["id"] as? NSNumber)?.stringValue ?? "", title: $0["name"] as? String ?? "", artists: ($0["artists"] as? [[String: Any]] ?? []).compactMap { $0["name"] as? String }, album: album?["name"] as? String ?? "", duration: (($0["duration"] as? NSNumber)?.doubleValue ?? 0) / 1000)
             }
         }
-        guard let selected = LyricsMatching.best(candidates, for: song) else { return nil }
+        let selected = source == .qq
+            ? LyricsMatching.bestPlayerMatch(candidates, for: song)
+            : LyricsMatching.best(candidates, for: song)
+        guard let selected else { return nil }
         let text: String
         if source == .qq {
             let root = try await json("https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg", params: ["songmid": selected.id, "format": "json", "nobase64": "1", "g_tk": "5381"], source: source) as? [String: Any]

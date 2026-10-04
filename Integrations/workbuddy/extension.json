@@ -1,0 +1,8 @@
+{
+  "id": "boring-notch-bridge",
+  "name": "灵动岛消息桥接",
+  "version": "0.1.0",
+  "kind": "platform",
+  "permissions": ["conversations.get", "conversations.sendPrompt"],
+  "service": { "entry": "./server/index.cjs", "process": "fork", "activationEvents": ["onStartup"] }
+}

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AppKit
 import ApplicationServices
 import IOKit
 import CoreGraphics
@@ -21,21 +22,6 @@ class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
         AXIsProcessTrustedWithOptions(options)
     }
 
-    @objc func ensureAccessibilityAuthorization(_ promptIfNeeded: Bool, with reply: @escaping (Bool) -> Void) {
-        if AXIsProcessTrusted() {
-            reply(true)
-            return
-        }
-
-        if promptIfNeeded {
-            requestAccessibilityAuthorization()
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            reply(AXIsProcessTrusted())
-        }
-    }
-    
     private class KeyboardBrightnessClient {
         private static let keyboardID: UInt64 = 1
         private var clientInstance: NSObject?
@@ -145,9 +131,77 @@ class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
         }
     }
 
+    @objc func sendWorkBuddyInstruction(_ taskID: String, prompt: String, requestID: String, with reply: @escaping (String) -> Void) {
+        Task { reply(await WorkBuddyInstructionSender.send(taskID: taskID, prompt: prompt, requestID: requestID)) }
+    }
+
+    @objc func probeWorkBuddyBridge(_ taskID: String, with reply: @escaping (String) -> Void) {
+        Task { reply(await WorkBuddyInstructionSender.probe(taskID: taskID)) }
+    }
+
+    @objc func installWorkBuddyBridge(with reply: @escaping (String) -> Void) {
+        DispatchQueue.global(qos: .utility).async { reply(WorkBuddyInstructionSender.install()) }
+    }
+
+    @objc func readWorkBuddyTasks(with reply: @escaping (Data?) -> Void) {
+        DispatchQueue.global(qos: .utility).async { reply(try? WorkBuddyTasksReader.read()) }
+    }
+
+    @objc func readWorkBuddyHistory(_ taskID: String, cursor: String?, with reply: @escaping (Data?) -> Void) {
+        DispatchQueue.global(qos: .utility).async { reply(try? WorkBuddyTasksReader.readHistory(taskID, cursor: cursor)) }
+    }
+
+    @objc func controlDSHSession(_ sessionID: String, action: String, prompt: String?, requestID: String, with reply: @escaping (String) -> Void) {
+        Task { reply(await DSHTasksReader.control(sessionID, action: action, prompt: prompt, requestID: requestID)) }
+    }
+
+    @objc func installDSHBridge(_ appPath: String?, isRunning: Bool, with reply: @escaping (String) -> Void) {
+        DispatchQueue.global(qos: .utility).async {
+            guard let package = Bundle.main.url(forResource: "boring-notch-dsh-0.3.0", withExtension: "zip", subdirectory: "DSHDesktop/dist") else { reply("unsupported"); return }
+            let script = Bundle.main.url(forResource: "install", withExtension: "mjs", subdirectory: "DSHDesktop")
+            reply(DSHPluginInstaller.install(packageURL: package, scriptURL: script, appURL: appPath.map { URL(fileURLWithPath: $0) }, isRunning: isRunning))
+        }
+    }
+
+    @objc func installMiMoBridge(with reply: @escaping (String) -> Void) {
+        DispatchQueue.global(qos: .utility).async { reply(MiMoBridgeClient.install()) }
+    }
+    @objc func probeMiMoBridge(with reply: @escaping (String) -> Void) {
+        Task { reply(await MiMoBridgeClient.probe()) }
+    }
+    @objc func controlMiMoSession(_ sessionID: String, action: String, prompt: String?, requestID: String, with reply: @escaping (String) -> Void) {
+        Task { reply(await MiMoBridgeClient.control(sessionID, action: action, prompt: prompt, requestID: requestID)) }
+    }
+
+    @objc func readMiMoTasks(with reply: @escaping (Data?) -> Void) {
+        Task {
+            guard let contexts = try? MiMoTasksReader.local.contexts() else { reply(nil); return }
+            let statuses = await MiMoBridgeClient.statuses(contexts)
+            reply(try? MiMoTasksReader.local.read(statuses: statuses))
+        }
+    }
+
+    @objc func readMiMoHistory(_ sessionID: String, cursor: String?, with reply: @escaping (Data?) -> Void) {
+        DispatchQueue.global(qos: .utility).async { reply(try? MiMoTasksReader.local.readHistory(sessionID, cursor: cursor)) }
+    }
+
+    @objc func readDSHTasks(with reply: @escaping (Data?) -> Void) {
+        Task { reply(await DSHTasksReader.readTasks()) }
+    }
+
+    @objc func readDSHHistory(_ sessionID: String, cursor: String?, with reply: @escaping (Data?) -> Void) {
+        Task { reply(await DSHTasksReader.readHistory(sessionID, cursor: cursor)) }
+    }
+
     @objc func readPinnedCodexTasks(with reply: @escaping (Data?) -> Void) {
         DispatchQueue.global(qos: .utility).async {
             reply(try? CodexPinnedTasksReader.read())
+        }
+    }
+
+    @objc func readCodexHistory(_ threadID: String, cursor: String?, with reply: @escaping (Data?) -> Void) {
+        DispatchQueue.global(qos: .utility).async {
+            reply(try? CodexPinnedTasksReader.readHistory(threadID, cursor: cursor))
         }
     }
 
@@ -166,6 +220,16 @@ class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
             } catch {
                 reply(error.localizedDescription)
             }
+        }
+    }
+
+    @objc func interruptCodexTask(_ threadID: String, with reply: @escaping (String?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                try CodexPinnedTasksReader.validatePinnedThread(threadID)
+                try CodexDesktopInstructionSender.interrupt(threadID: threadID)
+                reply(nil)
+            } catch { reply(error.localizedDescription) }
         }
     }
 
@@ -217,5 +281,119 @@ class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
             }
             return nil
         }()
+    }
+}
+
+private final class NativeMusicControls {
+    let bundleID: String
+    init(_ bundleID: String) { self.bundleID = bundleID }
+    private func nativeAttribute(_ element: AXUIElement, _ key: String) -> CFTypeRef? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, key as CFString, &value) == .success else { return nil }
+        return value
+    }
+
+    private func nativeLabel(_ element: AXUIElement) -> String {
+        for key in [kAXDescriptionAttribute, kAXTitleAttribute] {
+            if let value = nativeAttribute(element, key) as? String, !value.isEmpty { return value }
+        }
+        return ""
+    }
+
+    @discardableResult
+    private func pressNativeMenuItem(_ title: String) -> Bool {
+        // Menu items remain in the accessibility tree while the menu is closed.
+        // Invoke the leaf directly, without moving the pointer or raising a window.
+        if let item = nativePlayerElements().first(where: { nativeLabel($0) == title }),
+           AXUIElementPerformAction(item, kAXPressAction as CFString) == .success {
+            return true
+        }
+        // Older client builds may only expose items after opening their menu.
+        let controlMenu = bundleID == "com.netease.163music" ? "控制" : "播放控制"
+        if let menu = nativePlayerElements().first(where: { nativeLabel($0) == controlMenu }) {
+            AXUIElementPerformAction(menu, kAXPressAction as CFString)
+        }
+        if let item = nativePlayerElements().first(where: { nativeLabel($0) == title }) {
+            return AXUIElementPerformAction(item, kAXPressAction as CFString) == .success
+        }
+        return false
+    }
+
+    private func nativePlayerElements() -> [AXUIElement] {
+        guard AXIsProcessTrusted(), let app = NSRunningApplication.runningApplications(
+            withBundleIdentifier: bundleID).first else { return [] }
+        var result: [AXUIElement] = []
+        func visit(_ element: AXUIElement, depth: Int) {
+            guard depth < 12, result.count < 1500 else { return }
+            result.append(element)
+            for child in nativeAttribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? [] {
+                visit(child, depth: depth + 1)
+            }
+        }
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        visit(root, depth: 0)
+        if let menu = nativeAttribute(root, kAXMenuBarAttribute) {
+            visit(menu as! AXUIElement, depth: 0)
+        }
+        return result
+    }
+
+
+    func snapshot() -> [String: Any] {
+        var result: [String: Any] = ["favoriteAvailable": false]
+        for item in nativePlayerElements() {
+            let label = nativeLabel(item)
+            if label.contains("我喜欢") {
+                result["favoriteAvailable"] = true
+                result["isFavorite"] = !label.contains("添加")
+            } else if label == "喜欢歌曲" || label == "取消喜欢" {
+                result["favoriteAvailable"] = true
+                if bundleID == "com.netease.163music" {
+                    result["isFavorite"] = label == "取消喜欢"
+                }
+            }
+            if label.contains("播放模式（") {
+                result["repeatMode"] = label.contains("单曲") ? 2 : label.contains("随机") ? 1 : 3
+                result["isShuffled"] = label.contains("随机")
+            } else if label == "随机播放", bundleID == "com.netease.163music" {
+                result["isShuffled"] = (nativeAttribute(item, "AXMenuItemMarkChar") as? String).map { !$0.isEmpty } ?? false
+            } else if ["关", "单曲", "全部"].contains(label),
+                      let mark = nativeAttribute(item, "AXMenuItemMarkChar") as? String, !mark.isEmpty {
+                result["repeatMode"] = label == "单曲" ? 2 : label == "全部" ? 3 : 1
+            }
+        }
+        return result
+    }
+
+    func run(_ action: String) -> Data? {
+        guard ["com.netease.163music", "com.tencent.QQMusicMac"].contains(bundleID), AXIsProcessTrusted() else { return nil }
+        let before = snapshot()
+        if action == "like" || action == "unlike" {
+            guard let liked = before["isFavorite"] as? Bool else { return nil }
+            if liked != (action == "like") { pressNativeMenuItem(liked ? "取消喜欢" : "喜欢歌曲") }
+        } else if action == "repeat" {
+            let mode = before["repeatMode"] as? Int ?? 1
+            let shuffled = before["isShuffled"] as? Bool ?? false
+            if bundleID == "com.netease.163music" {
+                // Random -> single track -> playlist -> random.
+                if shuffled {
+                    guard pressNativeMenuItem("随机播放"), pressNativeMenuItem("单曲") else { return nil }
+                } else if mode == 2 {
+                    guard pressNativeMenuItem("全部") else { return nil }
+                } else {
+                    guard pressNativeMenuItem("随机播放") else { return nil }
+                }
+            } else {
+                let title = shuffled ? "单曲循环" : mode == 2 ? "顺序播放" : "随机播放"
+                guard pressNativeMenuItem(title) else { return nil }
+            }
+        } else if action != "state" { return nil }
+        return try? JSONSerialization.data(withJSONObject: snapshot())
+    }
+}
+
+extension BoringNotchXPCHelper {
+    @objc func nativeMusicControl(_ bundleID: String, action: String, with reply: @escaping (Data?) -> Void) {
+        DispatchQueue.main.async { reply(NativeMusicControls(bundleID).run(action)) }
     }
 }

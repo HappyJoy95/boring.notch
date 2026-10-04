@@ -12,6 +12,7 @@ import Foundation
 final class NowPlayingController: ObservableObject, MediaControllerProtocol {
     func updatePlaybackInfo() async {
         await fetchFavoriteStateIfSupported()
+        await refreshNativePlayerState()
     }
 
     // MARK: - Properties
@@ -30,12 +31,30 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
 
     var supportsFavorite: Bool {
         let bundleID = playbackState.bundleIdentifier
-        return bundleID == "com.apple.Music"
+        return bundleID == "com.apple.Music" || mediaRemoteSupportsFavorite
+            || (nativePlayerSupported && nativeFavoriteAvailable)
     }
+
+    private var nativePlayerSupported: Bool {
+        ["com.netease.163music", "com.tencent.QQMusicMac"].contains(playbackState.bundleIdentifier)
+    }
+
+    /// MediaRemote reports this per current track. Keep it separate from the
+    /// playback state because a diff payload may omit the capability fields.
+    private var mediaRemoteSupportsFavorite = false
 
     func setFavorite(_ favorite: Bool) async {
         let bundleID = playbackState.bundleIdentifier
-        
+        if nativePlayerSupported {
+            if let data = await XPCHelperClient.shared.nativeMusicControl(bundleID, action: favorite ? "like" : "unlike"),
+               bundleID == playbackState.bundleIdentifier {
+                applyNativePlayerState(data)
+            }
+            try? await Task.sleep(for: .milliseconds(200))
+            await refreshNativePlayerState()
+            return
+        }
+
         if bundleID == "com.apple.Music" {
             let runningApps = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music")
             if !runningApps.isEmpty {
@@ -48,6 +67,14 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
                 """
                 try? await AppleScriptHelper.executeVoid(script)
             }
+        } else if mediaRemoteSupportsFavorite {
+            // A negative LikeTrack feedback clears the like; DislikeTrack is
+            // a separate action and must not be used to remove a favorite.
+            guard let pointer = CFBundleGetDataPointerForName(
+                mediaRemoteBundle, "kMRMediaRemoteOptionIsNegative" as CFString
+            ) else { return }
+            let key = pointer.assumingMemoryBound(to: CFString.self).pointee
+            MRMediaRemoteSendCommandFunction(21, [key as String: !favorite] as NSDictionary)
         }
         
         // Update the favorite state locally and fetch updated info
@@ -154,10 +181,19 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
     }
     
     func toggleRepeat() async {
-        // MRMediaRemoteSendCommandFunction(7, nil)
-        let newRepeatMode = (playbackState.repeatMode == .off) ? 3 : (playbackState.repeatMode.rawValue - 1)
-        playbackState.repeatMode = RepeatMode(rawValue: newRepeatMode) ?? .off
-        MRMediaRemoteSetRepeatModeFunction(newRepeatMode)
+        if nativePlayerSupported {
+            let bundleID = playbackState.bundleIdentifier
+            if let data = await XPCHelperClient.shared.nativeMusicControl(bundleID, action: "repeat"),
+               bundleID == playbackState.bundleIdentifier {
+                applyNativePlayerState(data)
+            }
+            try? await Task.sleep(for: .milliseconds(200))
+            await refreshNativePlayerState()
+            return
+        }
+        // AdvanceRepeatMode is the MediaRemote command used by the adapter.
+        // It lets each player apply its own supported repeat-cycle semantics.
+        MRMediaRemoteSendCommandFunction(7, nil)
     }
     
     func setVolume(_ level: Double) async {
@@ -230,6 +266,14 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
         let payload = update.payload
         let diff = update.diff ?? false
 
+        let sourceChanged = (payload.parentApplicationBundleIdentifier ?? payload.bundleIdentifier)
+            .map { $0 != playbackState.bundleIdentifier } ?? false
+        if let supportsIsLiked = payload.supportsIsLiked {
+            mediaRemoteSupportsFavorite = supportsIsLiked
+        } else if !diff || sourceChanged {
+            mediaRemoteSupportsFavorite = false
+        }
+
         var newPlaybackState = PlaybackState(bundleIdentifier: playbackState.bundleIdentifier)
         
         newPlaybackState.title = payload.title ?? (diff ? self.playbackState.title : "")
@@ -239,7 +283,7 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
         
         if let elapsedTime = payload.elapsedTime {
             newPlaybackState.currentTime = elapsedTime
-        } else if diff {
+        } else if diff && !sourceChanged {
             if payload.playing == false {
                 let timeSinceLastUpdate = Date().timeIntervalSince(self.playbackState.lastUpdated)
                 newPlaybackState.currentTime = self.playbackState.currentTime + (self.playbackState.playbackRate * timeSinceLastUpdate)
@@ -292,13 +336,40 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
         )
         
         newPlaybackState.volume = payload.volume ?? (diff ? self.playbackState.volume : 0.5)
+        if let isLiked = payload.isLiked {
+            newPlaybackState.isFavorite = isLiked
+        } else if diff && !sourceChanged {
+            newPlaybackState.isFavorite = self.playbackState.isFavorite
+        }
+        if sourceChanged { nativeFavoriteAvailable = false }
         
         self.playbackState = newPlaybackState
+        await refreshNativePlayerState()
         
         // Fetch favorite state for supported apps asynchronously
         // await fetchFavoriteStateIfSupported()
     }
     
+    private var nativeFavoriteAvailable = false
+
+    private func refreshNativePlayerState() async {
+        guard nativePlayerSupported else { return }
+        let bundleID = playbackState.bundleIdentifier
+        guard let data = await XPCHelperClient.shared.nativeMusicControl(bundleID, action: "state"),
+              bundleID == playbackState.bundleIdentifier else { return }
+        applyNativePlayerState(data)
+    }
+
+    private func applyNativePlayerState(_ data: Data) {
+        guard let state = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        nativeFavoriteAvailable = state["favoriteAvailable"] as? Bool ?? false
+        var updated = playbackState
+        if let liked = state["isFavorite"] as? Bool { updated.isFavorite = liked }
+        if let mode = state["repeatMode"] as? Int { updated.repeatMode = RepeatMode(rawValue: mode) ?? .off }
+        if let shuffled = state["isShuffled"] as? Bool { updated.isShuffled = shuffled }
+        playbackState = updated
+    }
+
      private func fetchFavoriteStateIfSupported() async {
          let bundleID = playbackState.bundleIdentifier
         
@@ -345,6 +416,8 @@ struct NowPlayingPayload: Codable {
     let parentApplicationBundleIdentifier: String?
     let bundleIdentifier: String?
     let volume: Double?
+    let isLiked: Bool?
+    let supportsIsLiked: Bool?
 }
 
 actor JSONLinesPipeHandler {

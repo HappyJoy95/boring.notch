@@ -36,8 +36,8 @@ struct SettingsView: View {
                 NavigationLink(value: "Media") {
                     Label("Media", systemImage: "play.laptopcomputer")
                 }
-                NavigationLink(value: "Codex") {
-                    Label("Codex", systemImage: "sparkles")
+                NavigationLink(value: "AIAgent") {
+                    Label("AI Agent", systemImage: "sparkles")
                 }
                 NavigationLink(value: "Calendar") {
                     Label("Calendar", systemImage: "calendar")
@@ -80,8 +80,8 @@ struct SettingsView: View {
                     Appearance()
                 case "Media":
                     Media()
-                case "Codex":
-                    CodexActivitySettings()
+                case "AIAgent":
+                    AIAgentSettings()
                 case "Calendar":
                     CalendarSettings()
                 case "HUD":
@@ -132,17 +132,120 @@ struct SettingsView: View {
     }
 }
 
-struct CodexActivitySettings: View {
+struct AIAgentSettings: View {
+    @Default(.agentRefreshInterval) private var agentRefreshInterval
+    @Default(.agentConversationFontSize) private var agentConversationFontSize
+    @AppStorage("agentCardSortOrder") private var agentCardSortOrder = 1
+    @AppStorage(AgentSourcePreferences.codexKey) private var codexEnabled = true
+    @AppStorage(AgentSourcePreferences.workBuddyKey) private var workBuddyEnabled = true
+    @AppStorage(AgentSourcePreferences.dshKey) private var dshEnabled = true
+    @AppStorage(AgentSourcePreferences.mimoKey) private var mimoEnabled = true
     @ObservedObject private var receiver = CodexActivityReceiver.shared
     @State private var copied = false
+    @State private var mimoBridgeState = "checking"
+    @State private var mimoInstalling = false
+    @State private var mimoInstallNotice: String?
+    @State private var dshInstalling = false
+    @State private var dshInstallNotice: String?
 
     var body: some View {
         Form {
-            Section("General") {
+            Section("来源") {
+                Toggle("Codex", isOn: $codexEnabled)
+                Toggle("WorkBuddy", isOn: $workBuddyEnabled)
+                Toggle("DSH", isOn: $dshEnabled)
+                Toggle("MiMo Desktop", isOn: $mimoEnabled)
+            }
+            Section("会话显示") {
+                Picker("会话窗口字号", selection: $agentConversationFontSize) {
+                    Text("小（当前大小）").tag(0)
+                    Text("中").tag(1)
+                    Text("大").tag(2)
+                }
+                Stepper(value: $agentRefreshInterval, in: 2...30, step: 1) {
+                    LabeledContent("会话刷新间隔", value: "\(Int(agentRefreshInterval)) 秒")
+                }
+                Text("适用于 Codex、WorkBuddy、DSH 和 MiMo 的定时刷新。插件主动推送的消息不受间隔影响。字号仅影响展开的会话窗口。")
+                    .font(.footnote).foregroundStyle(.secondary)
+                Button("恢复默认") {
+                    Defaults.reset(.agentRefreshInterval, .agentConversationFontSize)
+                }
+            }
+            Section("MiMo 接入组件") {
+                LabeledContent("连接状态", value: mimoBridgeState == "ready" ? "已连接" : (mimoBridgeState == "missing" ? "尚未安装" : (mimoBridgeState == "checking" ? "正在检查…" : "未连接")))
+                HStack {
+                    Button(mimoInstalling ? "正在安装…" : "安装 / 更新接入组件") {
+                        mimoInstalling = true
+                        Task {
+                            let result = await XPCHelperClient.shared.installMiMoBridge()
+                            mimoInstalling = false
+                            switch result {
+                            case "installed": mimoInstallNotice = "组件已安装，请重启 MiMo 后检查连接。"
+                            case "conflict": mimoInstallNotice = "安装位置已有其他文件，请检查后重试。"
+                            default: mimoInstallNotice = "安装失败，请确认 MiMo 已安装且安装目录可写。"
+                            }
+                            mimoBridgeState = await XPCHelperClient.shared.probeMiMoBridge()
+                        }
+                    }
+                    .disabled(mimoInstalling)
+                    Button("检查连接") {
+                        mimoBridgeState = "checking"
+                        Task { mimoBridgeState = await XPCHelperClient.shared.probeMiMoBridge() }
+                    }
+                    .disabled(mimoInstalling || mimoBridgeState == "checking")
+                }
+                Text(mimoInstallNotice ?? "安装后支持发送、打断和运行状态。首次安装需重启 MiMo，会话读取无需组件。")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Section("DSH 插件") {
+                if let bundleURL = Bundle.main.url(forResource: "boring-notch-dsh-0.3.0", withExtension: "zip", subdirectory: "DSHDesktop/dist") {
+                    LabeledContent("内置插件包", value: "0.3.0")
+                    HStack {
+                        Button(dshInstalling ? "正在安装…" : "一键安装 / 更新") {
+                            let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "io.dsh.desktop")
+                            let isRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: "io.dsh.desktop").isEmpty
+                            dshInstalling = true
+                            dshInstallNotice = "正在安装并启用插件，请稍候…"
+                            Task {
+                                let result = await XPCHelperClient.shared.installDSHBridge(appPath: appURL?.path, isRunning: isRunning)
+                                dshInstalling = false
+                                switch result {
+                                case "installed": dshInstallNotice = "插件已安装并启用，请重启 DSH。"
+                                case "missing": dshInstallNotice = "未找到 DSH Desktop，请先安装 DSH。"
+                                case "not-initialized": dshInstallNotice = "请先启动 DSH Desktop 并完成初始化，再安装插件。"
+                                case "unsupported": dshInstallNotice = "当前 DSH 不支持自动安装，请更新 DSH 或使用手动安装。"
+                                case "quit-required": dshInstallNotice = "升级旧版插件需要先退出 DSH，再点击安装。"
+                                case "unknown": dshInstallNotice = "安装结果未确认，请在 DSH 插件管理器中检查后再操作。"
+                                default: dshInstallNotice = "安装失败，请检查网络和 DSH 插件管理器后重试，或使用手动安装。"
+                                }
+                            }
+                        }
+                        .disabled(dshInstalling)
+                        if dshInstalling { ProgressView().controlSize(.small) }
+                    }
+                    Button("在访达中显示安装包") {
+                        NSWorkspace.shared.activateFileViewerSelecting([bundleURL])
+                    }
+                    Text(dshInstallNotice ?? "点击即可安装并启用插件，完成后重启 DSH。也可解压安装包，在 DSH 插件管理器中手动添加。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Label("内置插件包不可用", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Section("Codex") {
                 Toggle("Show Codex tab", isOn: Binding(
                     get: { BoringViewCoordinator.shared.codexTabEnabled },
                     set: { BoringViewCoordinator.shared.codexTabEnabled = $0 }
                 ))
+            }
+            Section("会话卡片排序") {
+                Picker("排序方式", selection: $agentCardSortOrder) {
+                    Text("上次提醒时间（最近优先）").tag(0)
+                    Text("添加时间（先添加在前）").tag(1)
+                    Text("按应用分组").tag(2)
+                }
             }
             Section("Codex pinned tasks") {
                 LabeledContent("Local bridge") {
@@ -181,6 +284,11 @@ struct CodexActivitySettings: View {
         }
         .formStyle(.grouped)
         .padding()
+        .onChange(of: codexEnabled) { _ in Task { await CodexPinnedTasksService.shared.refresh() } }
+        .onChange(of: workBuddyEnabled) { _ in Task { await CodexPinnedTasksService.shared.refresh() } }
+        .onChange(of: dshEnabled) { _ in Task { await CodexPinnedTasksService.shared.refresh() } }
+        .onChange(of: mimoEnabled) { _ in Task { await CodexPinnedTasksService.shared.refresh() } }
+        .task { mimoBridgeState = await XPCHelperClient.shared.probeMiMoBridge() }
     }
 }
 
@@ -429,11 +537,6 @@ struct Charge: View {
                 Text("Battery Information")
             }
         }
-        .onAppear {
-            Task { @MainActor in
-                await XPCHelperClient.shared.isAccessibilityAuthorized()
-            }
-        }
         .accentColor(.effectiveAccent)
         .navigationTitle("Battery")
     }
@@ -520,6 +623,9 @@ struct Charge: View {
 //}
 
 struct HUD: View {
+    @Default(.compactHUDDuration) private var compactHUDDuration
+    @Default(.expandedHUDDuration) private var expandedHUDDuration
+    @Default(.downloadHintDuration) private var downloadHintDuration
     @EnvironmentObject var vm: BoringViewModel
     @Default(.inlineHUD) var inlineHUD
     @Default(.enableGradient) var enableGradient
@@ -530,7 +636,24 @@ struct HUD: View {
     
     var body: some View {
         Form {
-            Section {
+            Section("提示停留时间") {
+                Stepper(value: $compactHUDDuration, in: 0.5...10, step: 0.5) {
+                    LabeledContent("收起时的音量、亮度提示", value: "\(String(format: "%.1f", compactHUDDuration)) 秒")
+                }
+                Stepper(value: $expandedHUDDuration, in: 0.5...10, step: 0.5) {
+                    LabeledContent("展开时的音量、亮度提示", value: "\(String(format: "%.1f", expandedHUDDuration)) 秒")
+                }
+                Stepper(value: $downloadHintDuration, in: 0.5...10, step: 0.5) {
+                    LabeledContent("下载提示", value: "\(String(format: "%.1f", downloadHintDuration)) 秒")
+                }
+                Text("调整灵动岛临时提示的自动收起时间，不影响 AI 会话提醒或下载任务本身。新的时间会在下一次提示时生效。")
+                    .font(.footnote).foregroundStyle(.secondary)
+                Button("恢复默认") {
+                    Defaults.reset(.compactHUDDuration, .expandedHUDDuration, .downloadHintDuration)
+                }
+            }
+
+            Section("辅助功能权限") {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Replace system HUD")
@@ -547,15 +670,20 @@ struct HUD: View {
                     .controlSize(.large)
                     .disabled(!accessibilityAuthorized)
                 }
+
+                Text("同一项辅助功能权限也用于 QQ 音乐和网易云音乐的喜欢与循环控制。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 
                 if !accessibilityAuthorized {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Accessibility access is required to replace the system HUD.")
+                        Text("授权后即可启用系统 HUD 替换和上述音乐控制。你可以稍后在这里授权。")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
 
                         HStack(spacing: 12) {
-                            Button("Request Accessibility") {
+                            Button("请求辅助功能权限") {
                                 XPCHelperClient.shared.requestAccessibilityAuthorization()
                             }
                             .buttonStyle(.borderedProminent)
@@ -651,6 +779,7 @@ struct HUD: View {
 struct Media: View {
     @Default(.waitInterval) var waitInterval
     @Default(.mediaController) var mediaController
+    @ObservedObject private var musicManager = MusicManager.shared
     @ObservedObject var coordinator = BoringViewCoordinator.shared
     @Default(.hideNotchOption) var hideNotchOption
     @Default(.enableSneakPeek) private var enableSneakPeek
@@ -676,7 +805,7 @@ struct Media: View {
             } header: {
                 Text("Media Source")
             } footer: {
-                if MusicManager.shared.isNowPlayingDeprecated {
+                if musicManager.isNowPlayingDeprecated {
                     HStack {
                         Text("YouTube Music requires this third-party app to be installed: ")
                             .foregroundStyle(.secondary)
@@ -761,7 +890,7 @@ struct Media: View {
 
     // Only show controller options that are available on this macOS version
     private var availableMediaControllers: [MediaControllerType] {
-        if MusicManager.shared.isNowPlayingDeprecated {
+        if musicManager.isNowPlayingDeprecated {
             return MediaControllerType.allCases.filter { $0 != .nowPlaying }
         } else {
             return MediaControllerType.allCases
@@ -932,7 +1061,7 @@ struct About: View {
                 HStack(spacing: 30) {
                     Spacer(minLength: 0)
                     Button {
-                        if let url = URL(string: "https://github.com/TheBoredTeam/boring.notch") {
+                        if let url = URL(string: "https://github.com/HappyJoy95/boring.notch") {
                             NSWorkspace.shared.open(url)
                         }
                     } label: {

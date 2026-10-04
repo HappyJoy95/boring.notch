@@ -1673,6 +1673,7 @@
       }
     },
     "Accessibility access is required to replace the system HUD." : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -2323,6 +2324,9 @@
           }
         }
       }
+    },
+    "AI Agent" : {
+
     },
     "All-day" : {
       "localizations" : {
@@ -5989,9 +5993,6 @@
         }
       }
     },
-    "Codex · 实时进度" : {
-
-    },
     "Codex pinned tasks" : {
 
     },
@@ -6840,6 +6841,7 @@
       }
     },
     "Couldn’t read Codex tasks" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8645,6 +8647,12 @@
           }
         }
       }
+    },
+    "DSH" : {
+
+    },
+    "DSH 插件" : {
+
     },
     "e.g., 1920" : {
       "localizations" : {
@@ -13215,6 +13223,7 @@
       }
     },
     "Loading pinned Codex tasks…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -13542,6 +13551,40 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "低电量模式"
+          }
+        }
+      }
+    },
+    "Low Power: Off" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Low Power: Off"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "低电量模式：关闭"
+          }
+        }
+      }
+    },
+    "Low Power: On" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Low Power: On"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "低电量模式：开启"
           }
         }
       }
@@ -14982,6 +15025,12 @@
         }
       }
     },
+    "MiMo Desktop" : {
+
+    },
+    "MiMo 接入组件" : {
+
+    },
     "Mirror" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -16387,6 +16436,7 @@
       }
     },
     "No pinned Codex tasks" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -17867,6 +17917,7 @@
       }
     },
     "Pin a task in Codex to see its status and latest reply here." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -18092,8 +18143,8 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "已插入"
+            "state" : "translated",
+            "value" : "已接入电源"
           }
         }
       }
@@ -19648,6 +19699,7 @@
       }
     },
     "Request Accessibility" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -24389,6 +24441,23 @@
         }
       }
     },
+    "Unplugged" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unplugged"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已断开电源"
+          }
+        }
+      }
+    },
     "Untitled task" : {
       "localizations" : {
         "en" : {
@@ -25604,6 +25673,12 @@
         }
       }
     },
+    "WorkBuddy" : {
+
+    },
+    "WorkBuddy 发送组件未连接" : {
+
+    },
     "Working" : {
       "localizations" : {
         "en" : {
@@ -26104,28 +26179,178 @@
         }
       }
     },
-    "你" : {
+    "一键安装 / 更新" : {
+
+    },
+    "上次发送结果未确认，请先在 MiMo 中核对，避免重复发送。" : {
+
+    },
+    "上次提醒时间（最近优先）" : {
+
+    },
+    "下载提示" : {
+
+    },
+    "中" : {
+
+    },
+    "中止" : {
+
+    },
+    "中止当前会话" : {
+
+    },
+    "会话刷新间隔" : {
+
+    },
+    "会话卡片排序" : {
+
+    },
+    "会话显示" : {
+
+    },
+    "会话窗口字号" : {
 
     },
     "关闭会话详情" : {
 
     },
+    "内置插件包" : {
+
+    },
+    "内置插件包不可用" : {
+
+    },
     "最近对话" : {
+
+    },
+    "列表播放" : {
+
+    },
+    "加载失败，点击重试" : {
+
+    },
+    "加载更早对话" : {
+
+    },
+    "单曲循环" : {
 
     },
     "发送" : {
 
     },
+    "发送到 WorkBuddy" : {
+
+    },
+    "发送到当前 WorkBuddy 会话" : {
+
+    },
     "发送到当前会话" : {
 
     },
-    "告诉 Codex 接下来做什么…" : {
+    "同一项辅助功能权限也用于 QQ 音乐和网易云音乐的喜欢与循环控制。" : {
 
     },
-    "在 Codex 中打开" : {
+    "告诉 %@ 接下来做什么…" : {
+
+    },
+    "告诉 WorkBuddy 接下来做什么…" : {
+
+    },
+    "在 %@ 中打开" : {
+
+    },
+    "在 %@ 中继续对话" : {
+
+    },
+    "在已启用的 AI Agent 应用中置顶会话，即可在这里查看回复。" : {
+
+    },
+    "在访达中显示安装包" : {
+
+    },
+    "大" : {
+
+    },
+    "安装 / 更新接入组件" : {
+
+    },
+    "安装 WorkBuddy 发送组件" : {
+
+    },
+    "小（当前大小）" : {
+
+    },
+    "展开时的音量、亮度提示" : {
+
+    },
+    "已在 MiMo 核对，允许发送下一条" : {
+
+    },
+    "已在 WorkBuddy 核对，允许发送下一条" : {
+
+    },
+    "恢复默认" : {
+
+    },
+    "按应用分组" : {
+
+    },
+    "授权后即可启用系统 HUD 替换和上述音乐控制。你可以稍后在这里授权。" : {
+
+    },
+    "排序方式" : {
+
+    },
+    "提示停留时间" : {
+
+    },
+    "收起时的音量、亮度提示" : {
+
+    },
+    "无法读取会话" : {
 
     },
     "暂无对话内容" : {
+
+    },
+    "暂无置顶会话" : {
+
+    },
+    "来源" : {
+
+    },
+    "检查连接" : {
+
+    },
+    "正在安装…" : {
+
+    },
+    "正在读取置顶会话…" : {
+
+    },
+    "添加时间（先添加在前）" : {
+
+    },
+    "请求辅助功能权限" : {
+
+    },
+    "调整灵动岛临时提示的自动收起时间，不影响 AI 会话提醒或下载任务本身。新的时间会在下一次提示时生效。" : {
+
+    },
+    "辅助功能权限" : {
+
+    },
+    "连接状态" : {
+
+    },
+    "适用于 Codex、WorkBuddy、DSH 和 MiMo 的定时刷新。插件主动推送的消息不受间隔影响。字号仅影响展开的会话窗口。" : {
+
+    },
+    "重新连接" : {
+
+    },
+    "随机播放" : {
 
     }
   },

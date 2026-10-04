@@ -2,6 +2,22 @@ import Defaults
 import SwiftUI
 
 struct AgentTasksView: View {
+    @AppStorage("agentCardSortOrder") private var sortOrder = 1
+    private var sortedTasks: [CodexPinnedTask] {
+        service.tasks.sorted { left, right in
+            if sortOrder == 0 {
+                let l = service.reminderTimes[left.id] ?? 0
+                let r = service.reminderTimes[right.id] ?? 0
+                if l != r { return l > r }
+            }
+            if sortOrder == 2, left.providerName != right.providerName {
+                return left.providerName < right.providerName
+            }
+            let l = service.addedTimes[left.id] ?? 0
+            let r = service.addedTimes[right.id] ?? 0
+            return l == r ? left.id < right.id : l < r
+        }
+    }
     @ObservedObject private var service = CodexPinnedTasksService.shared
 
     var body: some View {
@@ -10,19 +26,23 @@ struct AgentTasksView: View {
                 GeometryReader { geometry in
                     let outerInset = (Defaults[.cornerRadiusScaling]
                         ? cornerRadiusInsets.opened.top : cornerRadiusInsets.opened.bottom) + 12
-                    let extensionWidth = max(0, outerInset - 20)
-                    CodexPinnedTasksView(tasks: service.tasks, selectedTaskID: $service.selectedTaskID)
-                        .frame(width: geometry.size.width + 2 * extensionWidth, height: 118)
+                    let notchSideInset = Defaults[.cornerRadiusScaling]
+                        ? cornerRadiusInsets.opened.top : cornerRadiusInsets.closed.top
+                    let extensionWidth = outerInset - notchSideInset - agentCardInset - 2
+                    CodexPinnedTasksView(tasks: sortedTasks, selectedTaskID: $service.selectedTaskID,
+                                         pageWidth: geometry.size.width + 2 * extensionWidth,
+                                         sortOrder: sortOrder)
+                        .frame(width: geometry.size.width + 2 * extensionWidth, height: 134)
                         .clipped()
                         .offset(x: -extensionWidth)
                 }
-                .frame(height: 118)
+                .frame(height: 134)
             } else if service.isRefreshing {
                 VStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
                         .tint(.white.opacity(0.7))
-                    Text("Loading pinned Codex tasks…")
+                    Text("正在读取置顶会话…")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white.opacity(0.58))
                 }
@@ -32,7 +52,7 @@ struct AgentTasksView: View {
                     Image(systemName: "exclamationmark.circle")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(.white.opacity(0.6))
-                    Text("Couldn’t read Codex tasks")
+                    Text("无法读取会话")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.88))
                 }
@@ -42,10 +62,10 @@ struct AgentTasksView: View {
                     Image(systemName: "pin.slash")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(.white.opacity(0.6))
-                    Text("No pinned Codex tasks")
+                    Text("暂无置顶会话")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.88))
-                    Text("Pin a task in Codex to see its status and latest reply here.")
+                    Text("在已启用的 AI Agent 应用中置顶会话，即可在这里查看回复。")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.white.opacity(0.52))
                         .multilineTextAlignment(.center)
@@ -69,9 +89,9 @@ struct AgentTasksView: View {
                 let selectedTask = service.tasks.first { $0.id == service.selectedTaskID }
                 let delay: TimeInterval
                 if selectedTask?.status == .running {
-                    delay = 2.5
+                    delay = min(2.5, min(30, max(2, Defaults[.agentRefreshInterval])))
                 } else if service.selectedTaskID != nil {
-                    delay = 5
+                    delay = min(30, max(2, Defaults[.agentRefreshInterval]))
                 } else {
                     delay = 10
                 }

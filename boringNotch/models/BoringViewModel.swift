@@ -190,6 +190,10 @@ class BoringViewModel: NSObject, ObservableObject {
     }
 
     func open() {
+        if coordinator.openHomeAfterOutsideDismiss {
+            coordinator.currentView = .home
+            coordinator.openHomeAfterOutsideDismiss = false
+        }
         self.notchSize = expandedNotchSize(
             for: coordinator.currentView,
             hasPinnedTasks: coordinator.currentView == .agent

@@ -282,7 +282,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
 
-        Task { @MainActor in CodexActivityReceiver.shared.start() }
+        Task { @MainActor in
+            CodexActivityReceiver.shared.start()
+            CodexPinnedTasksService.shared.startMonitoring()
+        }
 
         NotificationCenter.default.addObserver(
             self,

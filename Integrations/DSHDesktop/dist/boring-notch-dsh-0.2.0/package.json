@@ -1,0 +1,34 @@
+{
+  "name": "boring-notch-dsh",
+  "version": "0.2.0",
+  "description": "Read-only DSH session bridge for Boring Notch on macOS",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "boring-notch",
+    "read-only"
+  ],
+  "license": "MIT",
+  "engines": {
+    "dsh": ">=0.10.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1-rc.1"
+  }
+}

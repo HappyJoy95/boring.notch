@@ -1,0 +1,19 @@
+{
+  "extensionId": "boring-notch-bridge",
+  "version": "0.1.0",
+  "kind": "platform",
+  "grantedPermissions": [
+    "conversations.get",
+    "conversations.sendPrompt"
+  ],
+  "processPolicy": {
+    "server": "fork",
+    "renderer": null
+  },
+  "rollout": {
+    "strategy": "full",
+    "percentage": 100
+  },
+  "status": "active",
+  "resident": true
+}

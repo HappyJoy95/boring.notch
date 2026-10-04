@@ -151,6 +151,13 @@ extension Defaults.Keys {
     static let selectedDownloadIndicatorStyle = Key<DownloadIndicatorStyle>("selectedDownloadIndicatorStyle", default: DownloadIndicatorStyle.progress)
     static let selectedDownloadIconStyle = Key<DownloadIconStyle>("selectedDownloadIconStyle", default: DownloadIconStyle.onlyAppIcon)
     
+    // MARK: User-adjustable timing and conversation appearance
+    static let agentRefreshInterval = Key<Double>("agentRefreshInterval", default: 5)
+    static let agentConversationFontSize = Key<Int>("agentConversationFontSize", default: 0)
+    static let compactHUDDuration = Key<Double>("compactHUDDuration", default: 1.5)
+    static let expandedHUDDuration = Key<Double>("expandedHUDDuration", default: 3)
+    static let downloadHintDuration = Key<Double>("downloadHintDuration", default: 2)
+
     // MARK: HUD
     static let hudReplacement = Key<Bool>("hudReplacement", default: false)
     static let inlineHUD = Key<Bool>("inlineHUD", default: false)

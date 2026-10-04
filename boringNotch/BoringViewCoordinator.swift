@@ -50,10 +50,23 @@ struct ExpandedItem {
 class BoringViewCoordinator: ObservableObject {
     static let shared = BoringViewCoordinator()
 
+    var openHomeAfterOutsideDismiss = false
+
     @Published var currentView: NotchViews = .home
     @Published var helloAnimationRunning: Bool = false
     @Published private(set) var codexPinnedTasks: [CodexPinnedTask] = []
     @Published private(set) var codexStatusEvent: CodexActivityEvent?
+    @Published private(set) var codexUnreadTaskIDs = Set<String>()
+    @Published private(set) var codexCompletionReminder: UUID?
+    @Published private(set) var codexHighlightedTaskIDs = Set<String>()
+    private var codexUnreadTracker: CodexUnreadTracker = {
+        guard let data = UserDefaults.standard.data(forKey: "codexUnreadTracker.v1"),
+              let saved = try? JSONDecoder().decode(CodexUnreadTracker.self, from: data) else {
+            return CodexUnreadTracker()
+        }
+        return saved
+    }()
+
     private var activityArbiter = ActivityArbiter()
     private var codexStatusExpiryTask: Task<Void, Never>?
     private var sneakPeekDispatch: DispatchWorkItem?
@@ -144,7 +157,7 @@ class BoringViewCoordinator: ObservableObject {
         ) { _ in
             Task { @MainActor in
                 if Defaults[.hudReplacement] {
-                    await MediaKeyInterceptor.shared.start(promptIfNeeded: false)
+                    await MediaKeyInterceptor.shared.start()
                 }
             }
         }
@@ -160,7 +173,7 @@ class BoringViewCoordinator: ObservableObject {
 
                     if change.newValue {
                         self.hudEnableTask = Task { @MainActor in
-                            let granted = await XPCHelperClient.shared.ensureAccessibilityAuthorization(promptIfNeeded: true)
+                            let granted = await XPCHelperClient.shared.isAccessibilityAuthorized()
                             if Task.isCancelled { return }
 
                             if granted {
@@ -183,7 +196,7 @@ class BoringViewCoordinator: ObservableObject {
                 if !authorized {
                     Defaults[.hudReplacement] = false
                 } else {
-                    await MediaKeyInterceptor.shared.start(promptIfNeeded: false)
+                    await MediaKeyInterceptor.shared.start()
                 }
             }
         }
@@ -191,8 +204,18 @@ class BoringViewCoordinator: ObservableObject {
 
     func updateCodexPinnedTasks(_ tasks: [CodexPinnedTask]) {
         var seen = Set<String>()
-        let pinned = Array(tasks.filter { !$0.id.isEmpty && seen.insert($0.id).inserted }.prefix(64))
+        let pinned = Array(tasks.filter { !$0.id.isEmpty && seen.insert($0.id).inserted }.prefix(96))
+        let newlyUnread = codexUnreadTracker.update(pinned,
+            readingID: CodexPinnedTasksService.shared.selectedTaskID)
+        CodexPinnedTasksService.shared.recordReminders(newlyUnread)
+        codexUnreadTaskIDs = codexUnreadTracker.unreadIDs
+        saveCodexReadState()
         codexPinnedTasks = pinned
+        if !newlyUnread.isEmpty && codexTabEnabled {
+            codexHighlightedTaskIDs = newlyUnread
+            currentView = .agent
+            codexCompletionReminder = UUID()
+        }
         let pinnedIDs = Set(pinned.map(\.id))
         activityArbiter.updatePinnedTaskIDs(pinnedIDs)
         if let event = codexStatusEvent, !pinnedIDs.contains(event.taskID) {
@@ -200,8 +223,21 @@ class BoringViewCoordinator: ObservableObject {
         }
     }
 
+    func markCodexTaskRead(_ id: String) {
+        codexUnreadTracker.markRead(id)
+        codexUnreadTaskIDs = codexUnreadTracker.unreadIDs
+        saveCodexReadState()
+    }
+
+    private func saveCodexReadState() {
+        if let data = try? JSONEncoder().encode(codexUnreadTracker) {
+            UserDefaults.standard.set(data, forKey: "codexUnreadTracker.v1")
+        }
+    }
+
     func applyCodexSnapshot(_ snapshot: CodexActivitySnapshot) {
-        updateCodexPinnedTasks(snapshot.tasks)
+        guard AgentTaskSnapshots.validated(snapshot.tasks, for: .codex) != nil else { return }
+        CodexPinnedTasksService.shared.applyCodexSnapshot(snapshot)
         if let event = snapshot.event {
             receiveCodexStatus(event.activityEvent)
         }
@@ -257,10 +293,11 @@ class BoringViewCoordinator: ObservableObject {
     }
 
     func toggleSneakPeek(
-        status: Bool, type: SneakContentType, duration: TimeInterval = 1.5, value: CGFloat = 0,
+        status: Bool, type: SneakContentType, duration: TimeInterval? = nil, value: CGFloat = 0,
         icon: String = ""
     ) {
-        sneakPeekDuration = duration
+        let isSystemHint = type == .volume || type == .brightness || type == .backlight || type == .mic
+        sneakPeekDuration = duration ?? (isSystemHint ? min(10, max(0.5, Defaults[.compactHUDDuration])) : 1.5)
         if type != .music {
             // close()
             if !Defaults[.hudReplacement] {
@@ -332,7 +369,10 @@ class BoringViewCoordinator: ObservableObject {
         didSet {
             if expandingView.show {
                 expandingViewTask?.cancel()
-                let duration: TimeInterval = (expandingView.type == .download ? 2 : 3)
+                let isSystemHint = [.volume, .brightness, .backlight, .mic].contains(expandingView.type)
+                let duration: TimeInterval = expandingView.type == .download
+                    ? min(10, max(0.5, Defaults[.downloadHintDuration]))
+                    : isSystemHint ? min(10, max(0.5, Defaults[.expandedHUDDuration])) : 3
                 let currentType = expandingView.type
                 expandingViewTask = Task { [weak self] in
                     try? await Task.sleep(for: .seconds(duration))

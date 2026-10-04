@@ -32,19 +32,9 @@ final class MediaKeyInterceptor {
     
     private init() {}
     
-    // MARK: - Accessibility (via XPC)
-    
-    func requestAccessibilityAuthorization() {
-        XPCHelperClient.shared.requestAccessibilityAuthorization()
-    }
-    
-    func ensureAccessibilityAuthorization(promptIfNeeded: Bool = false) async -> Bool {
-        await XPCHelperClient.shared.ensureAccessibilityAuthorization(promptIfNeeded: promptIfNeeded)
-    }
-    
     // MARK: - Event Tap
     
-    func start(promptIfNeeded: Bool = false) async {
+    func start() async {
         guard eventTap == nil else { return }
         
         // Ensure HUD replacement is enabled
@@ -55,14 +45,7 @@ final class MediaKeyInterceptor {
         
         // Check accessibility authorization
         let authorized = await XPCHelperClient.shared.isAccessibilityAuthorized()
-        if !authorized {
-            if promptIfNeeded {
-                let granted = await ensureAccessibilityAuthorization(promptIfNeeded: true)
-                guard granted else { return }
-            } else {
-                return
-            }
-        }
+        guard authorized else { return }
         
         let mask = CGEventMask(1 << kSystemDefinedEventType.rawValue)
         eventTap = CGEvent.tapCreate(
