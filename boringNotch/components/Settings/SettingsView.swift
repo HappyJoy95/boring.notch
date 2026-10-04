@@ -36,6 +36,9 @@ struct SettingsView: View {
                 NavigationLink(value: "Media") {
                     Label("Media", systemImage: "play.laptopcomputer")
                 }
+                NavigationLink(value: "Codex") {
+                    Label("Codex", systemImage: "sparkles")
+                }
                 NavigationLink(value: "Calendar") {
                     Label("Calendar", systemImage: "calendar")
                 }
@@ -77,6 +80,8 @@ struct SettingsView: View {
                     Appearance()
                 case "Media":
                     Media()
+                case "Codex":
+                    CodexActivitySettings()
                 case "Calendar":
                     CalendarSettings()
                 case "HUD":
@@ -124,6 +129,58 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AccentColorChanged"))) { _ in
             accentColorUpdateTrigger = UUID()
         }
+    }
+}
+
+struct CodexActivitySettings: View {
+    @ObservedObject private var receiver = CodexActivityReceiver.shared
+    @State private var copied = false
+
+    var body: some View {
+        Form {
+            Section("General") {
+                Toggle("Show Codex tab", isOn: Binding(
+                    get: { BoringViewCoordinator.shared.codexTabEnabled },
+                    set: { BoringViewCoordinator.shared.codexTabEnabled = $0 }
+                ))
+            }
+            Section("Codex pinned tasks") {
+                LabeledContent("Local bridge") {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Label(receiver.isListening ? String(localized: "Listening on this Mac") : String(localized: "Unavailable"), systemImage: receiver.isListening ? "checkmark.circle.fill" : "xmark.circle")
+                            .foregroundStyle(receiver.isListening ? Color.green : Color.secondary)
+                        Text(receiver.lastReceivedAt.map { $0.formatted(date: .omitted, time: .shortened) } ?? String(localized: "Waiting for plugin"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Pair the Codex activity plugin to display pinned task titles, status, and recent replies. Select a task card to review its conversation and send instructions. Sending does not approve Codex actions.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Text(receiver.pairingToken)
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                    HStack {
+                        Button(copied ? String(localized: "Copied") : String(localized: "Copy token")) {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(receiver.pairingToken, forType: .string)
+                            copied = true
+                        }
+                        Button("Rotate token", role: .destructive) {
+                            receiver.rotatePairingToken()
+                            copied = false
+                        }
+                        Spacer()
+                    }
+                }
+                    Text("Codex requires you to review and trust the plugin hooks before they run. Configure BORING_NOTCH_TOKEN for the hook process with the copied token. The bridge accepts requests only from this Mac.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
     }
 }
 
@@ -511,7 +568,7 @@ struct HUD: View {
             Section {
                 Picker("Option key behaviour", selection: $optionKeyAction) {
                     ForEach(OptionKeyAction.allCases) { opt in
-                        Text(opt.rawValue).tag(opt)
+                        Text(LocalizedStringKey(opt.rawValue)).tag(opt)
                     }
                 }
                 
@@ -600,13 +657,14 @@ struct Media: View {
     @Default(.sneakPeekStyles) var sneakPeekStyles
 
     @Default(.enableLyrics) var enableLyrics
+    @Default(.showCollapsedLyrics) var showCollapsedLyrics
 
     var body: some View {
         Form {
             Section {
                 Picker("Music Source", selection: $mediaController) {
                     ForEach(availableMediaControllers) { controller in
-                        Text(controller.rawValue).tag(controller)
+                        Text(LocalizedStringKey(controller.rawValue)).tag(controller)
                     }
                 }
                 .onChange(of: mediaController) { _, _ in
@@ -647,7 +705,7 @@ struct Media: View {
                 Toggle("Show sneak peek on playback changes", isOn: $enableSneakPeek)
                 Picker("Sneak Peek Style", selection: $sneakPeekStyles) {
                     ForEach(SneakPeekStyle.allCases) { style in
-                        Text(style.rawValue).tag(style)
+                        Text(LocalizedStringKey(style.rawValue)).tag(style)
                     }
                 }
                 HStack {
@@ -685,6 +743,10 @@ struct Media: View {
                         customBadge(text: "Beta")
                     }
                 }
+                Toggle("Show lyrics below the notch when collapsed", isOn: $showCollapsedLyrics)
+                    .onChange(of: showCollapsedLyrics) { _, _ in
+                        MusicManager.shared.refreshLyricsIfAvailable()
+                    }
             } header: {
                 Text("Media controls")
             }  footer: {
@@ -970,7 +1032,7 @@ struct Shelf: View {
                             }
                             .frame(width: 16, height: 16)
                             .foregroundColor(.accentColor)
-                            Text(provider.id)
+                            Text(provider.id == QuickShareService.xiaomiProviderID ? QuickShareService.xiaomiProviderName : provider.id)
                         }
                         .tag(provider.id)
                     }
@@ -991,7 +1053,7 @@ struct Shelf: View {
                         .frame(width: 16, height: 16)
                         .foregroundColor(.accentColor)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Currently selected: \(selectedProvider.id)")
+                            Text("Currently selected: \(selectedProvider.id == QuickShareService.xiaomiProviderID ? QuickShareService.xiaomiProviderName : selectedProvider.id)")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             Text("Files dropped on the shelf will be shared via this service")
@@ -1195,7 +1257,7 @@ struct Appearance: View {
                 }
                 Picker("Slider color", selection: $sliderColor) {
                     ForEach(SliderColorEnum.allCases, id: \.self) { option in
-                        Text(option.rawValue)
+                        Text(LocalizedStringKey(option.rawValue))
                     }
                 }
             } header: {

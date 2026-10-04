@@ -69,7 +69,7 @@ struct InlineHUD: View {
             
             HStack {
                 if (type == .mic) {
-                    Text(value.isZero ? "muted" : "unmuted")
+                    Text(LocalizedStringKey(value.isZero ? "muted" : "unmuted"))
                         .foregroundStyle(.gray)
                         .lineLimit(1)
                         .allowsTightening(true)

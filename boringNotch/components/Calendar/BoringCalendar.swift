@@ -253,7 +253,7 @@ struct EmptyEventsView: View {
             Image(systemName: "calendar.badge.checkmark")
                 .font(.title)
                 .foregroundColor(Color(white: 0.65))
-            Text(Calendar.current.isDateInToday(selectedDate) ? "No events today" : "No events")
+            Text(LocalizedStringKey(Calendar.current.isDateInToday(selectedDate) ? "No events today" : "No events"))
                 .font(.subheadline)
                 .foregroundColor(.white)
             Text("Enjoy your free time!")
@@ -468,7 +468,7 @@ struct ReminderToggle: View {
         }
         .buttonStyle(PlainButtonStyle())
         .padding(0)
-        .accessibilityLabel(isOn ? "Mark as incomplete" : "Mark as complete")
+        .accessibilityLabel(LocalizedStringKey(isOn ? "Mark as incomplete" : "Mark as complete"))
     }
 }
 

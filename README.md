@@ -6,194 +6,144 @@
   <br>
 </h1>
 
-
 <p align="center">
   <a title="Crowdin" target="_blank" href="https://crowdin.com/project/boring-notch"><img src="https://badges.crowdin.net/boring-notch/localized.svg"></a>
-  <img src="https://github.com/TheBoredTeam/boring.notch/actions/workflows/cicd.yml/badge.svg" alt="TheBoringNotch Build & Test" style="margin-right: 10px;" />
-  <a href="https://discord.gg/c8JXA7qrPm">
-    <img src="https://dcbadge.limes.pink/api/server/https://discord.gg/c8JXA7qrPm?style=flat" alt="Discord Badge" />
-  </a>
-  <a href="https://www.ko-fi.com/alexander5015">
-    <img src="https://srv-cdn.himpfen.io/badges/kofi/kofi-flat.svg" alt="Ko-Fi" />
-  </a>
+  <img src="https://github.com/TheBoredTeam/boring.notch/actions/workflows/cicd.yml/badge.svg" alt="TheBoringNotch 构建与测试" style="margin-right: 10px;" />
+  <a href="https://discord.gg/c8JXA7qrPm"><img src="https://dcbadge.limes.pink/api/server/https://discord.gg/c8JXA7qrPm?style=flat" alt="Discord 徽章" /></a>
+  <a href="https://www.ko-fi.com/alexander5015"><img src="https://srv-cdn.himpfen.io/badges/kofi/kofi-flat.svg" alt="Ko-fi" /></a>
 </p>
 
 <p align="center">
-  <a href="https://trendshift.io/repositories/14815?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-14815" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/14815" alt="TheBoredTeam%2Fboring.notch |    Trendshift" width="250" height="55"/></a>
-</p>
-<!--Welcome to **Boring.Notch**, the coolest way to make your MacBook's notch the star of the show! Forget about those boring status bars—our notch turns into a dynamic music control center, complete with a snazzy visualizer and all the music controls you need. It's like having a mini concert right at the top of your screen! -->
-
-Say hello to **Boring Notch**, the coolest way to make your MacBook’s notch the star of the show! Say goodbye to boring status bars: with Boring Notch, your notch transforms into a dynamic music control center, complete with a vibrant visualizer and all the essential music controls you need. But that’s just the start! Boring Notch also offers calendar integration, a handy file shelf with AirDrop support, a complete MacOS HUD replacement and more!
-
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/2d5f69c1-6e7b-4bc2-a6f1-bb9e27cf88a8" alt="Demo GIF" />
+  <a href="https://trendshift.io/repositories/14815?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-14815" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/14815" alt="TheBoredTeam%2Fboring.notch | 趋势" width="250" height="55"/></a>
 </p>
 
-<!--https://github.com/user-attachments/assets/19b87973-4b3a-4853-b532-7e82d1d6b040-->
----
-<!--## Table of Contents
-- [Installation](#installation)
-- [Usage](#usage)
-- [Roadmap](#-roadmap)
-- [Building from Source](#building-from-source)
-- [Contributing](#-contributing)
-- [Join our Discord Server](#join-our-discord-server)
-- [Star History](#star-history)
-- [Buy us a coffee!](#buy-us-a-coffee)
-- [Acknowledgments](#-acknowledgments)-->
+**Boring Notch** 让 MacBook 的灵动岛成为屏幕上的焦点。它将灵动岛变成动态音乐控制中心，提供生动的可视化效果和常用音乐控制功能。此外还支持日历、带隔空投送功能的文件暂存区、自定义 macOS HUD 等。
 
-## Installation
-
-**System Requirements:**
-- macOS **14 Sonoma** or later
-- Apple Silicon or Intel Mac
+<p align="center"><img src="https://github.com/user-attachments/assets/2d5f69c1-6e7b-4bc2-a6f1-bb9e27cf88a8" alt="演示动画" /></p>
 
 ---
 
-### Option 1: Download and Install Manually
+## 安装
 
-<a href="https://github.com/TheBoredTeam/boring.notch/releases/latest/download/boringNotch.dmg" target="_self"><img width="200" src="https://github.com/user-attachments/assets/e3179be1-8416-4b8a-b417-743e1ecc67d6" alt="Download for macOS" /></a>
+**系统要求：**
+- macOS **14 Sonoma** 或更高版本
+- Apple 芯片或 Intel Mac
 
-Once downloaded, open the `.dmg` and move **Boring Notch** to your `/Applications` folder.
+### 方式一：手动下载并安装
+
+<a href="https://github.com/TheBoredTeam/boring.notch/releases/latest/download/boringNotch.dmg" target="_self"><img width="200" src="https://github.com/user-attachments/assets/e3179be1-8416-4b8a-b417-743e1ecc67d6" alt="下载 macOS 版本" /></a>
+
+下载后打开 `.dmg`，将 **Boring Notch** 拖入 `/Applications` 文件夹。
 
 > [!IMPORTANT]
-> We don't have an Apple Developer account (yet 👀), so macOS will warn you that Boring Notch is from an unidentified developer on first launch. This is expected behavior.
->
-> You'll need to bypass this before the app will open. You only need to do this once. Use one of the methods below.
+> 目前我们还没有 Apple 开发者账号，因此首次启动时，macOS 会提示 Boring Notch 来自身份不明的开发者。这是预期行为。首次打开前需要绕过此限制，只需操作一次。
 
----
+#### 推荐方式：终端（始终有效）
 
-#### Recommended: Terminal (Always Works)
-
-This is the quickest and easiest method. It only requires a single command and works consistently for all users. System Settings can sometimes fail and won't work for non-admin users.
-
-After moving Boring Notch to your Applications folder, run:
+这是最快捷的方式，只需运行一条命令。将 Boring Notch 移入“应用程序”文件夹后运行：
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/Boring Notch.app"
 ```
 
-Then open the app normally.
+然后正常打开应用即可。
 
----
-
-#### Alternative: System Settings
+#### 备用方式：系统设置
 
 > [!NOTE]
-> This method doesn't work for all users. If this doesn't work, use the Terminal method above.
+> 此方式并非对所有用户都有效。如果操作失败，请使用上面的终端方式。
 
-1. Try to open the app — you'll see a security warning.
-2. Click **OK** to dismiss it.
-3. Open **System Settings** > **Privacy & Security**.
-4. Scroll to the bottom and click **Open Anyway** next to the Boring Notch warning.
-5. Confirm if prompted.
+1. 尝试打开应用，此时会出现安全警告。
+2. 点击 **好** 关闭警告。
+3. 打开 **系统设置** > **隐私与安全性**。
+4. 滚动到页面底部，在 Boring Notch 的提示旁点击 **仍要打开**。
+5. 如出现确认提示，请确认操作。
 
----
+### 方式二：通过 Homebrew 安装
 
-### Option 2: Install via Homebrew
-
-You can also install using [Homebrew](https://brew.sh). The Homebrew installation automatically bypasses the macOS security warning described above.
+也可以使用 [Homebrew](https://brew.sh) 安装。Homebrew 安装时会自动绕过上述 macOS 安全警告。
 
 ```bash
 brew install --cask TheBoredTeam/boring-notch/boring-notch
 ```
 
-## Usage
+## 使用方法
 
-- Launch the app, and voilà—your notch is now the coolest part of your screen.
-- Hover over the notch to see it expand and reveal all its secrets.
-- Use the controls to manage your music like a rockstar.
-- Click the star in your menu bar to customize your notch to your heart's content.
+- 启动应用，灵动岛便会出现在屏幕上。
+- 将指针悬停在灵动岛上，即可展开并查看功能。
+- 使用控制项管理音乐播放。
+- 点击菜单栏中的星形图标，可自定义灵动岛。
 
-## 📋 Roadmap
-- [x] Playback live activity 🎧
-- [x] Calendar integration 📆
-- [x] Reminders integration ☑️
-- [x] Mirror 📷
-- [x] Charging indicator and current percentage 🔋
-- [x] Customizable gesture control 👆🏻
-- [x] Shelf functionality with AirDrop 📚
-- [x] Notch sizing customization, finetuning on different display sizes 🖥️
-- [x] System HUD replacements (volume, brightness, backlight) 🎚️💡⌨️
-- [ ] Bluetooth Live Activity (connect/disconnect for bluetooth devices) 
-- [ ] Weather integration ⛅️
-- [ ] Customizable Layout options 🛠️
-- [ ] Lock Screen Widgets 🔒
-- [ ] Extension system 🧩
-- [ ] Notifications (under consideration) 🔔
-<!-- - [ ] Clipboard history manager 📌 `Extension` -->
-<!-- - [ ] Download indicator of different browsers (Safari, Chromium browsers, Firefox) 🌍 `Extension`-->
-<!-- - [ ] Customizable function buttons 🎛️ -->
-<!-- - [ ] App switcher 🪄 -->
+## 🗺️ 开发路线图
 
-<!-- ## 🧩 Extensions
-> [!NOTE]
-> We’re hard at work on some awesome extensions! Stay tuned, and we’ll keep you updated as soon as they’re released. -->
+- [x] 音乐播放实时动态 🎧
+- [x] 日历集成 📆
+- [x] 提醒事项集成 ☑️
+- [x] 镜像 📷
+- [x] 充电指示和当前电量 🔋
+- [x] 可自定义手势控制 👆🏻
+- [x] 支持隔空投送的暂存区 📚
+- [x] 灵动岛尺寸自定义，适配不同显示器 🖥️
+- [x] 系统 HUD 替换（音量、亮度、键盘背光）🎚️💡⌨️
+- [ ] 蓝牙实时动态（蓝牙设备连接/断开）
+- [ ] 天气集成 ⛅️
+- [ ] 可自定义布局 🛠️
+- [ ] 锁定屏幕小组件 🔒
+- [ ] 扩展系统 🧩
+- [ ] 通知（正在评估）🔔
 
-## Building from Source
+## 从源代码构建
 
-### Prerequisites
+### 前置条件
 
-- **macOS 15.6 or later**
-- **Xcode 26 or later**
+- **macOS 15.6 或更高版本**
+- **Xcode 26 或更高版本**
 
-### Installation
+### 步骤
 
-1. **Clone the Repository**:
+1. **克隆仓库：**
    ```bash
    git clone https://github.com/TheBoredTeam/boring.notch.git
    cd boring.notch
    ```
-
-2. **Open the Project in Xcode**:
+2. **在 Xcode 中打开项目：**
    ```bash
    open boringNotch.xcodeproj
    ```
+3. **构建并运行：**点击“运行”按钮，或按 `Cmd + R`。
 
-3. **Build and Run**:
-    - Click the "Run" button or press `Cmd + R`. Watch the magic unfold!
+## 🤝 参与贡献
 
-## 🤝 Contributing
+欢迎贡献代码和建议！请阅读[贡献指南](CONTRIBUTING.md)，了解如何参与。
 
-We’re all about good vibes and awesome contributions! Read [CONTRIBUTING.md](CONTRIBUTING.md) to learn how you can join the fun!
+## 加入 Discord 社区
 
-## Join our Discord Server
+<a href="https://discord.gg/GvYcYpAKTu" target="_blank"><img src="https://iili.io/28m3GHv.png" alt="加入 Boring 社区！" style="height: 60px !important;width: 217px !important;" ></a>
 
-<a href="https://discord.gg/GvYcYpAKTu" target="_blank"><img src="https://iili.io/28m3GHv.png" alt="Join The Boring Server!" style="height: 60px !important;width: 217px !important;" ></a>
+## Star 历史
 
-## Star History
-<!-- BROKEN: GitHub now restricts the stargazer API for privacy reasons
-<a href="https://www.star-history.com/#TheBoredTeam/boring.notch&Timeline">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=TheBoredTeam/boring.notch&type=Timeline&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=TheBoredTeam/boring.notch&type=Timeline" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=TheBoredTeam/boring.notch&type=Timeline" />
- </picture>
-</a>
--->
  <picture>
    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/TheBoredTeam/org-star-chart-updater/main/projects/boring.notch/chart-dark.svg">
    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/TheBoredTeam/org-star-chart-updater/main/projects/boring.notch/chart-light.svg">
-   <img src="https://raw.githubusercontent.com/TheBoredTeam/org-star-chart-updater/main/projects/boring.notch/chart-light.svg" alt="TheBoredTeam/boring.notch GitHub star history">
+   <img src="https://raw.githubusercontent.com/TheBoredTeam/org-star-chart-updater/main/projects/boring.notch/chart-light.svg" alt="TheBoredTeam/boring.notch GitHub Star 历史" />
  </picture>
 
-## Support us on Ko-fi!
-<!-- <a href="https://www.buymeacoffee.com/jfxh67wvfxq" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-red.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a> -->
-<a href="https://www.ko-fi.com/alexander5015" target="_blank"><img src="https://github.com/user-attachments/assets//a76175ef-7e93-475a-8b67-4922ba5964c2" alt="Support us on Ko-fi" style="height: 70px !important;width: 346px !important;" ></a>
+## 在 Ko-fi 上支持我们
 
-## 🎉 Acknowledgments
+<a href="https://www.ko-fi.com/alexander5015" target="_blank"><img src="https://github.com/user-attachments/assets//a76175ef-7e93-475a-8b67-4922ba5964c2" alt="在 Ko-fi 上支持我们" style="height: 70px !important;width: 346px !important;" ></a>
 
-We would like to express our gratitude to the authors and maintainers of the open-source projects that made this possible. 
+## 🎉 致谢
 
-## Notable Projects
-- **[MediaRemoteAdapter](https://github.com/ungive/mediaremote-adapter)** –  An open-source project that allowed us to use the Now Playing source in macOS 15.4+
-- **[NotchDrop](https://github.com/Lakr233/NotchDrop)** – An open-source project that has been instrumental in developing the first version of the "Shelf" feature in Boring Notch.
+感谢所有为本项目提供支持的开源项目作者和维护者。
 
-For a full list of licenses and attributions, please see the [Third-Party Licenses](./THIRD_PARTY_LICENSES.md) file.
+### 值得关注的项目
+- **[MediaRemoteAdapter](https://github.com/ungive/mediaremote-adapter)**：开源项目，让 macOS 15.4 及更高版本可以使用“正在播放”媒体来源。
+- **[NotchDrop](https://github.com/Lakr233/NotchDrop)**：在开发 Boring Notch 首版“暂存区”功能时提供了重要帮助。
 
-### Icon credits: [@maxtron95](https://github.com/maxtron95)
-### Website credits: [@himanshhhhuv](https://github.com/himanshhhhuv)
+完整许可和致谢信息请参阅[第三方许可](./THIRD_PARTY_LICENSES.md)。
 
-- **SwiftUI**: For making us look like coding wizards.
-- **You**: For being awesome and checking out **boring.notch**!
+### 图标鸣谢：[ @maxtron95](https://github.com/maxtron95)
+### 网站鸣谢：[ @himanshhhhuv](https://github.com/himanshhhhuv)
 
+- **SwiftUI**：感谢它让界面开发更轻松。
+- **你**：感谢你关注 **Boring Notch**！

@@ -53,7 +53,7 @@ struct OpenNotchHUD: View {
                 })
                 .frame(width: showPercentage ? 65 : 108) // Fixed width for consistency
             } else {
-                Text(value > 0 ? "Unmuted" : "Muted")
+                Text(LocalizedStringKey(value > 0 ? "Unmuted" : "Muted"))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.white)
                     .fixedSize()

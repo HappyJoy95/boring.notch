@@ -1,0 +1,6 @@
+{
+  "name": "boring-notch-codex-activity",
+  "version": "0.1.0",
+  "description": "Read-only mirror of native Codex pinned tasks for Boring Notch.",
+  "hooks": "./hooks/hooks.json"
+}

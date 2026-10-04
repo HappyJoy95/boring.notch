@@ -1,133 +1,103 @@
-# Contributing
+# 贡献指南
 
-Thank you for taking the time to contribute! ❤️
+感谢你抽出时间参与贡献！❤️
 
-These guidelines help streamline the contribution process for everyone involved. By following them, you'll make it easier for maintainers to review your work and collaborate with you effectively.
+本指南旨在让贡献流程更顺畅。遵循这些说明有助于维护者审阅你的工作，也方便大家协作。
 
-You can contribute in many ways: writing code, improving documentation, reporting bugs, requesting features, or creating tutorials and blog posts. Every contribution, large or small, helps make Boring Notch better.
+你可以通过多种方式参与：编写代码、改进文档、报告缺陷、提出功能建议，或编写教程和博客。每一份贡献，无论大小，都能让 Boring Notch 变得更好。
 
-## Table of Contents
+## 目录
 
-- [Localizations](#localizations)
-- [Contributing Code](#contributing-code)
-  - [Before You Start](#before-you-start)
-  - [Setting Up Your Environment](#setting-up-your-environment)
-  - [Making Changes](#making-changes)
-  - [Pull Requests](#pull-requests)
-<!-- - [Code Style Guidelines](#code-style-guidelines) -->
-- [Reporting Bugs](#reporting-bugs)
-- [Feature Requests](#feature-requests)
-- [Getting Help](#getting-help)
+- [本地化](#本地化)
+- [贡献代码](#贡献代码)
+  - [开始之前](#开始之前)
+  - [配置开发环境](#配置开发环境)
+  - [进行修改](#进行修改)
+  - [拉取请求](#拉取请求)
+- [报告缺陷](#报告缺陷)
+- [功能建议](#功能建议)
+- [获取帮助](#获取帮助)
 
-## Localizations
+## 本地化
 
-Please submit all translations to [Crowdin](https://crowdin.com/project/boring-notch). New strings added to the `dev` branch from code changes will sync automatically to Crowdin, and Crowdin will automatically open a new PR with translations to allow us to integrate them.
+请通过 [Crowdin](https://crowdin.com/project/boring-notch) 提交翻译。代码改动将新字符串加入 `dev` 分支后，会自动同步到 Crowdin。Crowdin 会自动创建包含翻译的拉取请求，供我们合并。
 
-## Contributing Code
+## 贡献代码
 
-### Before You Start
+### 开始之前
 
-- **Check existing issues**: Before creating a new issue or starting work, search existing issues to avoid duplicates.
-- **Discuss major changes**: For significant features or major changes, please open an issue first to discuss your approach with maintainers and the community.
-<!-- - **Review the code style**: Familiarize yourself with our code style guidelines below to ensure consistency. -->
+- **检查现有议题**：创建新议题或开始开发前，请先搜索现有议题，避免重复。
+- **讨论重大改动**：对于重要功能或重大改动，请先创建议题，与维护者和社区讨论方案。
 
 > [!IMPORTANT]
-> All code contributions must be based on the `dev` branch, not `main`. Documentation changes should be based on `main` instead.
+> 所有代码贡献都必须基于 `dev` 分支，而不是 `main`。文档改动应基于 `main` 分支。
 
-### Setting Up Your Environment
+### 配置开发环境
 
-1. **Fork the repository**: Click the "Fork" button at the top of the repository page to create your own copy.
-
-2. **Clone your fork**:
+1. **Fork 仓库**：点击仓库页面顶部的“Fork”按钮，创建自己的副本。
+2. **克隆你的 Fork：**
    ```bash
    git clone https://github.com/{your-username}/boring.notch.git
    cd boring.notch
    ```
-   Replace `{your-username}` with your GitHub username.
-
-3. **Switch to the `dev` branch**:
+   将 `{your-username}` 替换为你的 GitHub 用户名。
+3. **切换到 `dev` 分支：**
    ```bash
    git checkout dev
    ```
-   All code contributions must be based on the `dev` branch, not `main`. Documentation changes should be based on `main` instead.
-
-5. **Create a new feature branch**:
+   所有代码贡献都必须基于 `dev` 分支；文档改动应基于 `main` 分支。
+4. **创建功能分支：**
    ```bash
    git checkout -b feature/{your-feature-name}
    ```
-   Replace `{your-feature-name}` with a descriptive name. Use lowercase letters, numbers, and hyphens only (e.g., `feature/add-dark-mode` or `fix/notification-crash`).
+   将 `{your-feature-name}` 替换成简短描述。只使用小写字母、数字和连字符，例如 `feature/add-dark-mode` 或 `fix/notification-crash`。
 
-### Making Changes
+### 进行修改
 
-1. **Make your changes**: Implement your feature or bug fix. Write clean, well-documented code <!-- following the project's style guidelines. -->
-
-2. **Test your changes**: Ensure your changes work as expected and don't break existing functionality.
-
-3. **Commit your changes**:
+1. **完成改动**：实现功能或修复缺陷。请编写清晰、易维护且有必要说明的代码。
+2. **检查改动**：确认功能符合预期，且没有破坏现有功能。
+3. **提交改动：**
    ```bash
    git add .
    git commit -m "Add descriptive commit message"
    ```
-   Write clear, concise commit messages that explain what your changes do and why.
-
-4. **Keep your branch up to date**:
-   Regularly sync your branch with the latest changes from the `dev` branch to avoid conflicts.
-
-5. **Push to your fork**:
+   提交说明应简洁清楚，解释改动内容和原因。
+4. **保持分支更新**：定期与 `dev` 分支同步，减少冲突。
+5. **推送到你的 Fork：**
    ```bash
    git push origin feature/{your-feature-name}
    ```
 
-### Pull Requests
+### 拉取请求
 
-1. **Create a pull request**: Go to the original repository and click "New Pull Request." Select your feature branch and set the base branch to `dev`.
+1. **创建拉取请求**：打开原始仓库，点击“New Pull Request”，选择你的功能分支，并将目标分支设为 `dev`。
+2. **填写详细说明**：请说明改动标题、内容和原因，关联相关议题（例如 `Fixes #123` 或 `Relates to #456`），并为界面改动附上截图或录屏。
+3. **回复评审意见**：维护者可能会要求你调整改动。
+4. **耐心等待**：维护者会尽快完成评审。
 
-2. **Write a detailed description**: Your PR should include:
-   - A clear title summarizing the changes
-   - A detailed description of what was changed and why
-   - Reference to any related issues (e.g., "Fixes #123" or "Relates to #456")
-   - Screenshots or screen recordings for UI changes
+## 报告缺陷
 
-3. **Respond to feedback**: Maintainers may request changes.
+报告缺陷时，请提供：
 
-4. **Be patient**: Reviews take time. Maintainers will get to your PR as soon as they can.
+- 清晰具体的标题
+- 复现步骤
+- 预期行为与实际行为
+- 相关截图或错误信息
+- 环境信息（操作系统版本、应用版本等）
 
-<!-- ## Code Style Guidelines
+## 功能建议
 
-- Follow the existing code style and conventions used in the project
-- Write clear, self-documenting code with meaningful variable and function names
-- Add comments for complex logic or non-obvious implementations
-- Ensure your code is properly formatted before committing
-- Remove any debugging code, console logs, or commented-out code before submitting -->
+欢迎提出功能建议。请先检查是否已有类似建议，清楚描述功能和使用场景，并说明它能为用户带来什么价值。也请对讨论和其他实现方式保持开放。
 
-## Reporting Bugs
+## 获取帮助
 
-When reporting bugs, please include:
+如果需要帮助或有疑问：
 
-- A clear, descriptive title
-- Steps to reproduce the issue
-- Expected behavior vs. actual behavior
-- Screenshots or error messages if applicable
-- Your environment details (OS version, app version, etc.)
-
-## Feature Requests
-
-Feature requests are welcome! Please:
-
-- Check if the feature has already been requested
-- Clearly describe the feature and its use case
-- Explain why this feature would be valuable to users
-- Be open to discussion and alternative approaches
-
-## Getting Help
-
-If you need help or have questions:
-
-- Check the project documentation
-- Search existing issues for similar questions
-- Open a new issue with the "question" label
-- Join our [community Discord server](https://discord.com/servers/boring-notch-1269588937320566815)
+- 查看项目文档
+- 搜索现有议题
+- 使用 `question` 标签创建新议题
+- 加入我们的 [Discord 社区](https://discord.com/servers/boring-notch-1269588937320566815)
 
 ---
 
-Thank you for contributing to Boring Notch! Your efforts help make this project better for everyone. 🎉
+感谢你为 Boring Notch 做出贡献！🎉

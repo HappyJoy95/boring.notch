@@ -73,6 +73,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        Task { @MainActor in CodexActivityReceiver.shared.stop() }
         NotificationCenter.default.removeObserver(self)
         if let observer = screenLockedObserver {
             DistributedNotificationCenter.default().removeObserver(observer)
@@ -280,6 +281,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+
+        Task { @MainActor in CodexActivityReceiver.shared.start() }
 
         NotificationCenter.default.addObserver(
             self,

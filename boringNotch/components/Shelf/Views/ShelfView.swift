@@ -69,6 +69,26 @@ struct ShelfView: View {
             .overlay {
                 content
                     .padding()
+                if !tvm.isEmpty {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Button {
+                                tvm.removeAll()
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.75))
+                                    .padding(7)
+                                    .background(.white.opacity(0.08), in: Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .help("Remove all shelf items")
+                        }
+                        Spacer()
+                    }
+                    .padding(8)
+                }
             }
             .transaction { transaction in
                 transaction.animation = vm.animation

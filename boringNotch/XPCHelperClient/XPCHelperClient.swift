@@ -241,10 +241,64 @@ final class XPCHelperClient: NSObject {
             return false
         }
     }
+
+    nonisolated func readCodexQuota() async -> Data? {
+        do {
+            let service = await MainActor.run {
+                ensureRemoteService()
+            }
+            return try await service.withContinuation { service, continuation in
+                service.readCodexQuota { data in
+                    continuation.resume(returning: data)
+                }
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    nonisolated func readPinnedCodexTasks() async -> Data? {
+        do {
+            let service = await MainActor.run {
+                ensureRemoteService()
+            }
+            return try await service.withContinuation { service, continuation in
+                service.readPinnedCodexTasks { data in
+                    continuation.resume(returning: data)
+                }
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    nonisolated func readPinnedCodexTask(_ threadID: String) async -> Data? {
+        do {
+            let service = await MainActor.run { ensureRemoteService() }
+            return try await service.withContinuation { service, continuation in
+                service.readPinnedCodexTask(threadID) { data in
+                    continuation.resume(returning: data)
+                }
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    nonisolated func sendCodexInstruction(threadID: String, prompt: String) async -> String? {
+        do {
+            let service = await MainActor.run { ensureRemoteService() }
+            return try await service.withContinuation { service, continuation in
+                service.sendCodexInstruction(threadID, prompt: prompt) { error in
+                    continuation.resume(returning: error)
+                }
+            }
+        } catch {
+            return error.localizedDescription
+        }
+    }
 }
 
 extension Notification.Name {
     static let accessibilityAuthorizationChanged = Notification.Name("accessibilityAuthorizationChanged")
 }
-
-

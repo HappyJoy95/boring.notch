@@ -18,6 +18,12 @@ struct QuickShareProvider: Identifiable, Hashable, Sendable {
 
 class QuickShareService: ObservableObject {
     static let shared = QuickShareService()
+
+    /// Finder exposes Xiaomi Share as a Services menu command rather than a
+    /// standard macOS sharing extension.
+    static let xiaomiProviderID = "xiaomi-interconnectivity"
+    static let xiaomiProviderName = "小米互传"
+    private static let xiaomiFinderServiceName = "使用小米互传发送"
     
     @Published var availableProviders: [QuickShareProvider] = []
     @Published var isPickerOpen = false
@@ -69,6 +75,12 @@ class QuickShareService: ObservableObject {
             providers.append(QuickShareProvider(id: "System Share Menu", imageData: nil, supportsRawText: true))
         }
 
+        // This service is registered by Xiaomi Interconnectivity and may not
+        // appear in NSSharingServicePicker's list of sharing extensions.
+        if !providers.contains(where: { $0.id == Self.xiaomiProviderID }) {
+            providers.append(QuickShareProvider(id: Self.xiaomiProviderID, imageData: nil, supportsRawText: false))
+        }
+
         self.availableProviders = providers
 
     }
@@ -116,6 +128,26 @@ class QuickShareService: ObservableObject {
         stopSharingAccessingURLs()
         // Start security-scoped access for all file URLs
         sharingAccessingURLs = fileURLs.filter { $0.startAccessingSecurityScopedResource() }
+
+        if provider.id == Self.xiaomiProviderID {
+            guard !fileURLs.isEmpty else {
+                NSLog("Xiaomi Share service only accepts files")
+                stopSharingAccessingURLs()
+                return
+            }
+
+            let pasteboard = NSPasteboard(name: NSPasteboard.Name("BoringNotch.XiaomiShareService"))
+            pasteboard.clearContents()
+            pasteboard.writeObjects(fileURLs as [NSURL])
+            pasteboard.setPropertyList(fileURLs.map(\.path), forType: NSPasteboard.PasteboardType("NSFilenamesPboardType"))
+
+            let succeeded = NSPerformService(Self.xiaomiFinderServiceName, pasteboard)
+            if !succeeded {
+                NSLog("Could not invoke Finder service: %@", Self.xiaomiFinderServiceName)
+            }
+            stopSharingAccessingURLs()
+            return
+        }
 
         // Setup lifecycle delegate to keep notch open during picker/service
         let delegate = SharingStateManager.shared.makeDelegate { [weak self] in
@@ -205,6 +237,9 @@ extension QuickShareProvider {
 
         if let airdrop = svc.availableProviders.first(where: { $0.id == "AirDrop" }) {
             return airdrop
+        }
+        if let xiaomi = svc.availableProviders.first(where: { $0.id == QuickShareService.xiaomiProviderID }) {
+            return xiaomi
         }
         return svc.availableProviders.first ?? QuickShareProvider(id: "System Share Menu", imageData: nil, supportsRawText: true)
     }

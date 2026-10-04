@@ -139,6 +139,36 @@ class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
         reply(false)
     }
 
+    @objc func readCodexQuota(with reply: @escaping (Data?) -> Void) {
+        DispatchQueue.global(qos: .utility).async {
+            reply(try? CodexQuotaReader.read())
+        }
+    }
+
+    @objc func readPinnedCodexTasks(with reply: @escaping (Data?) -> Void) {
+        DispatchQueue.global(qos: .utility).async {
+            reply(try? CodexPinnedTasksReader.read())
+        }
+    }
+
+    @objc func readPinnedCodexTask(_ threadID: String, with reply: @escaping (Data?) -> Void) {
+        DispatchQueue.global(qos: .utility).async {
+            reply(try? CodexPinnedTasksReader.readPinnedTask(threadID))
+        }
+    }
+
+    @objc func sendCodexInstruction(_ threadID: String, prompt: String, with reply: @escaping (String?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                try CodexPinnedTasksReader.validatePinnedThread(threadID)
+                try CodexDesktopInstructionSender.send(threadID: threadID, prompt: prompt)
+                reply(nil)
+            } catch {
+                reply(error.localizedDescription)
+            }
+        }
+    }
+
     // MARK: - Private helpers for DisplayServices / IOKit access
     private func displayServicesGetBrightness(displayID: CGDirectDisplayID, out: inout Float) -> Bool {
         guard let sym = dlsym(DisplayServicesHandle.handle, "DisplayServicesGetBrightness") else { return false }

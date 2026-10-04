@@ -52,6 +52,10 @@ class BoringViewCoordinator: ObservableObject {
 
     @Published var currentView: NotchViews = .home
     @Published var helloAnimationRunning: Bool = false
+    @Published private(set) var codexPinnedTasks: [CodexPinnedTask] = []
+    @Published private(set) var codexStatusEvent: CodexActivityEvent?
+    private var activityArbiter = ActivityArbiter()
+    private var codexStatusExpiryTask: Task<Void, Never>?
     private var sneakPeekDispatch: DispatchWorkItem?
     private var expandingViewDispatch: DispatchWorkItem?
     private var hudEnableTask: Task<Void, Never>?
@@ -60,6 +64,16 @@ class BoringViewCoordinator: ObservableObject {
     @AppStorage("showWhatsNew") var showWhatsNew: Bool = true
     @AppStorage("musicLiveActivityEnabled") var musicLiveActivityEnabled: Bool = true
     @AppStorage("currentMicStatus") var currentMicStatus: Bool = true
+    @AppStorage("codexTabEnabled") var codexTabEnabled: Bool = true {
+        didSet {
+            if !codexTabEnabled && currentView == .agent { currentView = .home }
+        }
+    }
+    @Default(.boringShelf) private var shelfEnabled: Bool {
+        didSet {
+            if !shelfEnabled && currentView == .shelf { currentView = .home }
+        }
+    }
 
     @AppStorage("alwaysShowTabs") var alwaysShowTabs: Bool = true {
         didSet {
@@ -173,6 +187,43 @@ class BoringViewCoordinator: ObservableObject {
                 }
             }
         }
+    }
+
+    func updateCodexPinnedTasks(_ tasks: [CodexPinnedTask]) {
+        var seen = Set<String>()
+        let pinned = Array(tasks.filter { !$0.id.isEmpty && seen.insert($0.id).inserted }.prefix(64))
+        codexPinnedTasks = pinned
+        let pinnedIDs = Set(pinned.map(\.id))
+        activityArbiter.updatePinnedTaskIDs(pinnedIDs)
+        if let event = codexStatusEvent, !pinnedIDs.contains(event.taskID) {
+            clearCodexStatusEvent()
+        }
+    }
+
+    func applyCodexSnapshot(_ snapshot: CodexActivitySnapshot) {
+        updateCodexPinnedTasks(snapshot.tasks)
+        if let event = snapshot.event {
+            receiveCodexStatus(event.activityEvent)
+        }
+    }
+
+    func receiveCodexStatus(_ event: CodexActivityEvent) {
+        let pinnedIDs = Set(codexPinnedTasks.map(\.id))
+        activityArbiter.receive(event, pinnedTaskIDs: pinnedIDs)
+        guard case .codexStatus = activityArbiter.selection(at: event.occurredAt) else { return }
+        codexStatusExpiryTask?.cancel()
+        codexStatusEvent = event
+        codexStatusExpiryTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(ActivityArbiter.quietWindow))
+            guard !Task.isCancelled else { return }
+            self?.clearCodexStatusEvent()
+        }
+    }
+
+    private func clearCodexStatusEvent() {
+        codexStatusExpiryTask?.cancel()
+        codexStatusExpiryTask = nil
+        codexStatusEvent = nil
     }
     
     @objc func sneakPeekEvent(_ notification: Notification) {

@@ -19,6 +19,7 @@ struct ContentView: View {
     @ObservedObject var webcamManager = WebcamManager.shared
 
     @ObservedObject var coordinator = BoringViewCoordinator.shared
+    @ObservedObject private var pinnedTaskService = CodexPinnedTasksService.shared
     @ObservedObject var musicManager = MusicManager.shared
     @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var brightnessManager = BrightnessManager.shared
@@ -34,6 +35,7 @@ struct ContentView: View {
     @Namespace var albumArtNamespace
 
     @Default(.useMusicVisualizer) var useMusicVisualizer
+    @Default(.showCollapsedLyrics) private var showCollapsedLyrics
 
     @Default(.showNotHumanFace) var showNotHumanFace
 
@@ -42,6 +44,8 @@ struct ContentView: View {
 
     private let extendedHoverPadding: CGFloat = 30
     private let zeroHeightHoverPadding: CGFloat = 10
+    // Caption row (26 pt) plus the header's 8 pt spacing.
+    private let collapsedMusicCaptionHeight: CGFloat = 34
 
     private var topCornerRadius: CGFloat {
        ((vm.notchState == .open) && Defaults[.cornerRadiusScaling])
@@ -61,7 +65,9 @@ struct ContentView: View {
     private var computedChinWidth: CGFloat {
         var chinWidth: CGFloat = vm.closedNotchSize.width
 
-        if coordinator.expandingView.type == .battery && coordinator.expandingView.show
+        if coordinator.codexStatusEvent != nil && vm.notchState == .closed && !vm.hideOnClosed {
+            chinWidth = min(420, vm.closedNotchSize.width + 180)
+        } else if coordinator.expandingView.type == .battery && coordinator.expandingView.show
             && vm.notchState == .closed && Defaults[.showPowerStatusNotifications]
         {
             chinWidth = 640
@@ -100,39 +106,46 @@ struct ContentView: View {
                         : cornerRadiusInsets.closed.bottom
                     )
                     .padding([.horizontal, .bottom], vm.notchState == .open ? 12 : 0)
-                    .background(.black)
-                    .clipShape(currentNotchShape)
+                    .background(alignment: .top) {
+                        GeometryReader { geometry in
+                            // Keep one opaque surface while playback expands or collapses.
+                            currentNotchShape
+                                .fill(.black)
+                                .frame(
+                                    width: geometry.size.width,
+                                    height: geometry.size.height + (shouldShowCollapsedLyrics ? chinContentHeight : 0),
+                                    alignment: .top
+                                )
+                        }
+                    }
                     .overlay(alignment: .top) {
                         Rectangle()
                             .fill(.black)
                             .frame(height: 1)
                             .padding(.horizontal, topCornerRadius)
                     }
-                    .shadow(
-                        color: ((vm.notchState == .open || isHovering) && Defaults[.enableShadow])
-                            ? .black.opacity(0.7) : .clear, radius: Defaults[.cornerRadiusScaling] ? 6 : 4
-                    )
                     .padding(
                         .bottom,
                         vm.effectiveClosedNotchHeight == 0 ? 10 : 0
                     )
                 
                 mainLayout
-                    .frame(height: vm.notchState == .open ? vm.notchSize.height : nil)
+                    .frame(height: vm.notchState == .open ? vm.notchSize.height : nil, alignment: .top)
+                    .background {
+                        CodexTaskPanelAnchor(isPresented:
+                            vm.notchState == .open && coordinator.currentView == .agent
+                                && pinnedTaskService.selectedTaskID != nil)
+                    }
                     .conditionalModifier(true) { view in
-                        let openAnimation = Animation.spring(response: 0.42, dampingFraction: 0.8, blendDuration: 0)
-                        let closeAnimation = Animation.spring(response: 0.45, dampingFraction: 1.0, blendDuration: 0)
-                        
                         return view
-                            .animation(vm.notchState == .open ? openAnimation : closeAnimation, value: vm.notchState)
                             .animation(.smooth, value: gestureProgress)
                     }
                     .contentShape(Rectangle())
                     .onHover { hovering in
                         handleHover(hovering)
                     }
-                    .onTapGesture {
-                        doOpen()
+                    .conditionalModifier(vm.notchState == .closed) { view in
+                        view.onTapGesture { doOpen() }
                     }
                     .conditionalModifier(Defaults[.enableGestures]) { view in
                         view
@@ -167,6 +180,53 @@ struct ContentView: View {
                             }
                         }
                     }
+                    .onChange(of: coordinator.codexPinnedTasks) { _, tasks in
+                        guard vm.notchState == .open else { return }
+                        withAnimation(.smooth) {
+                            if coordinator.currentView == .agent {
+                                vm.notchSize = compactCodexNotchSize
+                            } else {
+                                vm.notchSize = expandedNotchSize(for: coordinator.currentView, hasPinnedTasks: !tasks.isEmpty)
+                            }
+                        }
+                    }
+                    .onChange(of: coordinator.currentView) { _, newView in
+                        guard vm.notchState == .open else { return }
+                        withAnimation(.smooth) {
+                            if newView == .agent {
+                                vm.notchSize = compactCodexNotchSize
+                            } else {
+                                vm.notchSize = expandedNotchSize(for: newView, hasPinnedTasks: !coordinator.codexPinnedTasks.isEmpty)
+                            }
+                        }
+                    }
+                    .onChange(of: pinnedTaskService.tasks) { _, tasks in
+                        guard vm.notchState == .open, coordinator.currentView == .agent else { return }
+                        withAnimation(.smooth) {
+                            vm.notchSize = tasks.isEmpty
+                                ? expandedNotchSize(for: .agent, hasPinnedTasks: false)
+                                : compactCodexNotchSize
+                        }
+                    }
+                    .onChange(of: pinnedTaskService.selectedTaskID) { _, selectedID in
+                        guard selectedID == nil,
+                              vm.notchState == .open,
+                              coordinator.currentView == .agent,
+                              !vm.isMouseHovering() else { return }
+                        hoverTask?.cancel()
+                        hoverTask = Task {
+                            try? await Task.sleep(for: .milliseconds(220))
+                            guard !Task.isCancelled else { return }
+                            await MainActor.run {
+                                guard pinnedTaskService.selectedTaskID == nil,
+                                      self.vm.notchState == .open,
+                                      self.coordinator.currentView == .agent,
+                                      !self.vm.isMouseHovering(),
+                                      !SharingStateManager.shared.preventNotchClose else { return }
+                                self.vm.close()
+                            }
+                        }
+                    }
                     .onChange(of: vm.isBatteryPopoverActive) {
                         if !vm.isBatteryPopoverActive && !isHovering && vm.notchState == .open && !SharingStateManager.shared.preventNotchClose {
                             hoverTask?.cancel()
@@ -195,12 +255,47 @@ struct ContentView: View {
                         //                    }
                         //                    .keyboardShortcut("E", modifiers: .command)
                     }
-                if vm.chinHeight > 0 {
-                    Rectangle()
-                        .fill(Color.black.opacity(0.01))
-                        .frame(width: computedChinWidth, height: vm.chinHeight)
-                }
+                // Keep the row mounted so its height contracts instead of fading out.
+                Rectangle()
+                        .fill(shouldShowCollapsedLyrics ? Color.clear : Color.black.opacity(0.01))
+                        .overlay {
+                            if shouldShowCollapsedLyrics {
+                                CollapsedLyricsView()
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .transition(.identity)
+                            }
+                        }
+                        .frame(width: chinContentWidth, height: chinContentHeight)
+                        .conditionalModifier(!shouldShowCollapsedLyrics) { view in
+                            view.clipShape(
+                                UnevenRoundedRectangle(
+                                    cornerRadii: RectangleCornerRadii(
+                                        topLeading: 0,
+                                        bottomLeading: 14,
+                                        bottomTrailing: 14,
+                                        topTrailing: 0
+                                    ),
+                                    style: .continuous
+                                )
+                            )
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .clipped()
             }
+            .shadow(
+                color: ((vm.notchState == .open || isHovering) && Defaults[.enableShadow])
+                    ? .black.opacity(0.7) : .clear,
+                radius: Defaults[.cornerRadiusScaling] ? 6 : 4
+            )
+            .animation(
+                vm.notchState == .open
+                    ? Animation.spring(response: 0.42, dampingFraction: 0.8, blendDuration: 0)
+                    : Animation.spring(response: 0.45, dampingFraction: 1.0, blendDuration: 0),
+                value: vm.notchState
+            )
+            .animation(.smooth, value: musicManager.isPlayerIdle)
+            .animation(.smooth, value: shouldShowCollapsedLyrics)
+            .animation(.smooth, value: coordinator.sneakPeek.show)
         }
         .padding(.bottom, 8)
         .frame(maxWidth: windowSize.width, maxHeight: windowSize.height, alignment: .top)
@@ -242,10 +337,46 @@ struct ContentView: View {
         }
     }
 
+    private var shouldShowCollapsedLyrics: Bool {
+        guard showCollapsedLyrics,
+              vm.notchState == .closed,
+              !vm.hideOnClosed,
+              coordinator.musicLiveActivityEnabled,
+              musicManager.isPlaying || !musicManager.isPlayerIdle,
+              coordinator.codexStatusEvent == nil,
+              !(coordinator.expandingView.show && coordinator.expandingView.type != .music),
+              !coordinator.sneakPeek.show
+        else { return false }
+        return true
+    }
+
+    private var chinContentHeight: CGFloat {
+        max(vm.chinHeight, shouldShowCollapsedLyrics ? collapsedMusicCaptionHeight : 0)
+    }
+
+    private var chinContentWidth: CGFloat {
+        shouldShowCollapsedLyrics
+            ? collapsedPlaybackWidth - 2 * cornerRadiusInsets.closed.top
+            : computedChinWidth
+    }
+
+    private var musicCenterWidth: CGFloat {
+        (coordinator.expandingView.show
+            && coordinator.expandingView.type == .music
+            && Defaults[.sneakPeekStyles] == .inline)
+            ? 380 : vm.closedNotchSize.width - cornerRadiusInsets.closed.top
+    }
+
+    private var collapsedPlaybackWidth: CGFloat {
+        // Match the playback row, including its two gaps and outer padding.
+        musicCenterWidth + 2 * max(0, vm.effectiveClosedNotchHeight - 12)
+            + 16 + 2 * cornerRadiusInsets.closed.bottom
+    }
+
     @ViewBuilder
     func NotchLayout() -> some View {
         VStack(alignment: .leading) {
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 8) {
                 if coordinator.helloAnimationRunning {
                     Spacer()
                     HelloAnimation(onFinish: {
@@ -284,12 +415,17 @@ struct ContentView: View {
                             .frame(width: 76, alignment: .trailing)
                         }
                         .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
+                      } else if let codexEvent = coordinator.codexStatusEvent, vm.notchState == .closed, !vm.hideOnClosed {
+                          CodexStatusActivityView(event: codexEvent)
+                              .frame(width: min(420, vm.closedNotchSize.width + 180), height: vm.effectiveClosedNotchHeight)
+                              .transition(.opacity.combined(with: .move(edge: .top)))
                       } else if coordinator.sneakPeek.show && Defaults[.inlineHUD] && (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .battery) && vm.notchState == .closed {
                           InlineHUD(type: $coordinator.sneakPeek.type, value: $coordinator.sneakPeek.value, icon: $coordinator.sneakPeek.icon, hoverAnimation: $isHovering, gestureProgress: $gestureProgress)
                               .transition(.opacity)
                       } else if (!coordinator.expandingView.show || coordinator.expandingView.type == .music) && vm.notchState == .closed && (musicManager.isPlaying || !musicManager.isPlayerIdle) && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed {
                           MusicLiveActivity()
                               .frame(alignment: .center)
+                              .transition(.identity)
                       } else if !coordinator.expandingView.show && vm.notchState == .closed && (!musicManager.isPlaying && musicManager.isPlayerIdle) && Defaults[.showNotHumanFace] && !vm.hideOnClosed  {
                           BoringFaceAnimation()
                        } else if vm.notchState == .open {
@@ -298,6 +434,7 @@ struct ContentView: View {
                                .opacity(gestureProgress != 0 ? 1.0 - min(abs(gestureProgress) * 0.1, 0.3) : 1.0)
                        } else {
                            Rectangle().fill(.clear).frame(width: vm.closedNotchSize.width - 20, height: vm.effectiveClosedNotchHeight)
+                               .transition(.identity)
                        }
 
                       if coordinator.sneakPeek.show {
@@ -331,7 +468,7 @@ struct ContentView: View {
                                       }
                                   }
                                   .foregroundStyle(.gray)
-                                  .padding(.bottom, 10)
+                                  .frame(height: collapsedMusicCaptionHeight - 8)
                               }
                           }
                       }
@@ -349,6 +486,8 @@ struct ContentView: View {
                         NotchHomeView(albumArtNamespace: albumArtNamespace)
                     case .shelf:
                         ShelfView()
+                    case .agent:
+                        AgentTasksView()
                     }
                 }
                 .transition(
@@ -387,7 +526,7 @@ struct ContentView: View {
 
     @ViewBuilder
     func MusicLiveActivity() -> some View {
-        HStack {
+        HStack(spacing: 8) {
             Image(nsImage: musicManager.albumArt)
                 .resizable()
                 .clipped()
@@ -440,12 +579,7 @@ struct ContentView: View {
                     }
                 )
                 .frame(
-                    width: (coordinator.expandingView.show
-                        && coordinator.expandingView.type == .music
-                        && Defaults[.sneakPeekStyles] == .inline)
-                        ? 380
-                        : vm.closedNotchSize.width
-                            + -cornerRadiusInsets.closed.top
+                    width: musicCenterWidth
                 )
 
             HStack {
@@ -541,10 +675,15 @@ struct ContentView: View {
             }
         } else {
             hoverTask = Task {
-                try? await Task.sleep(for: .milliseconds(100))
+                try? await Task.sleep(for: .milliseconds(240))
                 guard !Task.isCancelled else { return }
                 
                 await MainActor.run {
+                    if self.vm.isMouseHovering()
+                        || (self.coordinator.currentView == .agent && CodexPinnedTasksService.shared.selectedTaskID != nil) {
+                        self.isHovering = true
+                        return
+                    }
                     withAnimation(animationSpring) {
                         self.isHovering = false
                     }
@@ -596,6 +735,13 @@ struct ContentView: View {
         }
 
         if translation > Defaults[.gestureSensitivity] {
+            if coordinator.currentView == .agent,
+               CodexPinnedTasksService.shared.selectedTaskID != nil {
+                CodexPinnedTasksService.shared.selectedTaskID = nil
+                withAnimation(animationSpring) { gestureProgress = .zero }
+                if Defaults[.enableHaptics] { haptics.toggle() }
+                return
+            }
             withAnimation(animationSpring) {
                 isHovering = false
             }
@@ -648,6 +794,34 @@ struct GeneralDropTargetDelegate: DropDelegate {
 
     func performDrop(info: DropInfo) -> Bool {
         return false
+    }
+}
+
+private struct CollapsedLyricsView: View {
+    @ObservedObject private var musicManager = MusicManager.shared
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.25)) { timeline in
+            let elapsed: Double = {
+                guard musicManager.isPlaying else { return musicManager.elapsedTime }
+                let delta = timeline.date.timeIntervalSince(musicManager.timestampDate)
+                return min(max(musicManager.elapsedTime + delta * musicManager.playbackRate, 0), musicManager.songDuration)
+            }()
+            let hasSyncedLyrics = !musicManager.syncedLyrics.isEmpty
+            let line: String = {
+                if musicManager.isFetchingLyrics { return "正在加载歌词…" }
+                if hasSyncedLyrics { return musicManager.lyricLine(at: elapsed) }
+                return musicManager.currentLyrics.isEmpty ? "暂无歌词" : "暂无逐句歌词"
+            }()
+            Text(line)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(hasSyncedLyrics ? 0.86 : 0.45))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .accessibilityLabel("Current lyrics")
     }
 }
 

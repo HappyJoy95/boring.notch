@@ -14,7 +14,24 @@ let batterySneakSize: CGSize = .init(width: 160, height: 1)
 
 let shadowPadding: CGFloat = 20
 let openNotchSize: CGSize = .init(width: 640, height: 190)
-let windowSize: CGSize = .init(width: openNotchSize.width, height: openNotchSize.height + shadowPadding)
+let homeQuotaNotchSize: CGSize = .init(width: openNotchSize.width, height: 355)
+let compactCodexNotchSize: CGSize = .init(width: openNotchSize.width, height: 225)
+let windowSize: CGSize = .init(
+    width: openNotchSize.width,
+    height: max(homeQuotaNotchSize.height, compactCodexNotchSize.height) + shadowPadding
+)
+
+func expandedNotchSize(for view: NotchViews, hasPinnedTasks: Bool) -> CGSize {
+    switch view {
+    case .home:
+        homeQuotaNotchSize
+    case .shelf:
+        openNotchSize
+    case .agent:
+        hasPinnedTasks ? compactCodexNotchSize : openNotchSize
+    }
+}
+
 let cornerRadiusInsets: (opened: (top: CGFloat, bottom: CGFloat), closed: (top: CGFloat, bottom: CGFloat)) = (opened: (top: 19, bottom: 24), closed: (top: 6, bottom: 14))
 
 enum MusicPlayerImageSizes {

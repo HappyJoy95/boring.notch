@@ -142,6 +142,14 @@
 		B1F0A0022E60000100000001 /* BrightnessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A0012E60000100000001 /* BrightnessManager.swift */; };
 		B1F747F92EC7E94000F841DB /* LottieView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F747F82EC7E94000F841DB /* LottieView.swift */; };
 		B1FEB4992C7686630066EBBC /* PanGesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1FEB4982C7686630066EBBC /* PanGesture.swift */; };
+		C0DE00000000000000000001 /* ActivityArbiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000002 /* ActivityArbiter.swift */; };
+		C0DE00000000000000000003 /* CodexActivityReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000004 /* CodexActivityReceiver.swift */; };
+		C0DE00000000000000000006 /* CodexQuota.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000007 /* CodexQuota.swift */; };
+		C0DE00000000000000000008 /* CodexQuotaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000009 /* CodexQuotaService.swift */; };
+		C0DE0000000000000000000A /* CodexQuotaStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000000B /* CodexQuotaStrip.swift */; };
+		C0DE0000000000000000000C /* AgentTasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000000D /* AgentTasksView.swift */; };
+		C0DE0000000000000000000E /* CodexPinnedTasksService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000000F /* CodexPinnedTasksService.swift */; };
+		C0DE00000000000000000020 /* LyricsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000021 /* LyricsService.swift */; };
 		F38DE6482D8243E7008B5C6D /* BatteryActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F38DE6472D8243E2008B5C6D /* BatteryActivityManager.swift */; };
 /* End PBXBuildFile section */
 
@@ -308,6 +316,14 @@
 		B1F0A0012E60000100000001 /* BrightnessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrightnessManager.swift; sourceTree = "<group>"; };
 		B1F747F82EC7E94000F841DB /* LottieView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LottieView.swift; sourceTree = "<group>"; };
 		B1FEB4982C7686630066EBBC /* PanGesture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanGesture.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000002 /* ActivityArbiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityArbiter.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000004 /* CodexActivityReceiver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexActivityReceiver.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000007 /* CodexQuota.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexQuota.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000009 /* CodexQuotaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexQuotaService.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000000B /* CodexQuotaStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexQuotaStrip.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000000D /* AgentTasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTasksView.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000000F /* CodexPinnedTasksService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexPinnedTasksService.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000021 /* LyricsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricsService.swift; sourceTree = "<group>"; };
 		F38DE6472D8243E2008B5C6D /* BatteryActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryActivityManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -568,6 +584,7 @@
 				B186543A2C6F49A4000B926A /* Shortcuts */,
 				1443E7F12C609DB90027C1FC /* sizing */,
 				14D570C72C5F38760011E668 /* models */,
+				C0DE00000000000000000005 /* services */,
 				14D570BA2C5E98E30011E668 /* enums */,
 				14D570B72C5E98960011E668 /* animations */,
 				147163B52C5D804B0068B555 /* managers */,
@@ -626,6 +643,8 @@
 		14D570C72C5F38760011E668 /* models */ = {
 			isa = PBXGroup;
 			children = (
+				C0DE00000000000000000002 /* ActivityArbiter.swift */,
+				C0DE00000000000000000007 /* CodexQuota.swift */,
 				11F748812ECB07A400F841DB /* MusicControlButton.swift */,
 				118D1FD02E98FF5F00A2FF63 /* SharingStateManager.swift */,
 				1163988E2DF5CC870052E6AF /* CalendarModel.swift */,
@@ -707,6 +726,8 @@
 				1194E8862EA6DDA7009C82D6 /* BoringNotchSkyLightWindow.swift */,
 				1160F8D72DD98230006FBB94 /* NotchShape.swift */,
 				9AB0C6BB2C73C9CB00F7CD30 /* NotchHomeView.swift */,
+				C0DE0000000000000000000B /* CodexQuotaStrip.swift */,
+				C0DE0000000000000000000D /* AgentTasksView.swift */,
 				14D570C52C5F38210011E668 /* BoringHeader.swift */,
 				14D570D12C5F6C6A0011E668 /* BoringExtrasMenu.swift */,
 				1471A8582C6281BD0058408D /* BoringNotchWindow.swift */,
@@ -755,6 +776,17 @@
 				B1C4489A2C97376A001F0858 /* TipStore.swift */,
 			);
 			path = Tips;
+			sourceTree = "<group>";
+		};
+		C0DE00000000000000000005 /* services */ = {
+			isa = PBXGroup;
+			children = (
+				C0DE00000000000000000004 /* CodexActivityReceiver.swift */,
+				C0DE00000000000000000009 /* CodexQuotaService.swift */,
+				C0DE00000000000000000021 /* LyricsService.swift */,
+				C0DE0000000000000000000F /* CodexPinnedTasksService.swift */,
+			);
+			path = services;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -844,6 +876,7 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				"zh-Hans",
 				Base,
 			);
 			mainGroup = 14CEF4092C5CAED200855D72;
@@ -905,6 +938,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C0DE00000000000000000006 /* CodexQuota.swift in Sources */,
+				C0DE00000000000000000008 /* CodexQuotaService.swift in Sources */,
+				C0DE00000000000000000020 /* LyricsService.swift in Sources */,
+				C0DE0000000000000000000A /* CodexQuotaStrip.swift in Sources */,
+				C0DE0000000000000000000C /* AgentTasksView.swift in Sources */,
+				C0DE0000000000000000000E /* CodexPinnedTasksService.swift in Sources */,
+				C0DE00000000000000000001 /* ActivityArbiter.swift in Sources */,
+				C0DE00000000000000000003 /* CodexActivityReceiver.swift in Sources */,
 				115C12EC2ED3D003009754CA /* OpenNotchHUD.swift in Sources */,
 				14C08BB92C8DE4B1000F8AA0 /* BoringCalendar.swift in Sources */,
 				5955950D2E900ED800C66711 /* ApplicationRelauncher.swift in Sources */,
