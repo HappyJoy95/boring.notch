@@ -124,6 +124,9 @@ struct ContentView: View {
                             .frame(height: 1)
                             .padding(.horizontal, topCornerRadius)
                     }
+                    .conditionalModifier(vm.notchState == .open) { view in
+                        view.clipShape(currentNotchShape)
+                    }
                     .padding(
                         .bottom,
                         vm.effectiveClosedNotchHeight == 0 ? 10 : 0

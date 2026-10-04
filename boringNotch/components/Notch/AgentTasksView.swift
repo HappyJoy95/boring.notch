@@ -7,8 +7,16 @@ struct AgentTasksView: View {
     var body: some View {
         Group {
             if !service.tasks.isEmpty {
-                CodexPinnedTasksView(tasks: service.tasks, selectedTaskID: $service.selectedTaskID)
-                    .frame(height: 118)
+                GeometryReader { geometry in
+                    let outerInset = (Defaults[.cornerRadiusScaling]
+                        ? cornerRadiusInsets.opened.top : cornerRadiusInsets.opened.bottom) + 12
+                    let extensionWidth = max(0, outerInset - 20)
+                    CodexPinnedTasksView(tasks: service.tasks, selectedTaskID: $service.selectedTaskID)
+                        .frame(width: geometry.size.width + 2 * extensionWidth, height: 118)
+                        .clipped()
+                        .offset(x: -extensionWidth)
+                }
+                .frame(height: 118)
             } else if service.isRefreshing {
                 VStack(spacing: 8) {
                     ProgressView()
@@ -47,10 +55,6 @@ struct AgentTasksView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        // Cancel the outer corner inset for the card strip only. The window
-        // and header retain their width; the outer 12-point padding remains.
-        .padding(.horizontal, -(Defaults[.cornerRadiusScaling]
-            ? cornerRadiusInsets.opened.top : cornerRadiusInsets.opened.bottom))
         .padding(.top, 8)
         .task {
             var nextListRefresh = Date.distantPast

@@ -15,7 +15,7 @@ let batterySneakSize: CGSize = .init(width: 160, height: 1)
 let shadowPadding: CGFloat = 20
 let openNotchSize: CGSize = .init(width: 640, height: 190)
 let homeQuotaNotchSize: CGSize = .init(width: openNotchSize.width, height: 355)
-let compactCodexNotchSize: CGSize = .init(width: openNotchSize.width, height: 225)
+let compactCodexNotchSize: CGSize = .init(width: openNotchSize.width, height: 190)
 let windowSize: CGSize = .init(
     width: openNotchSize.width,
     height: max(homeQuotaNotchSize.height, compactCodexNotchSize.height) + shadowPadding
