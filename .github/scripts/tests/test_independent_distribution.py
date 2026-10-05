@@ -12,6 +12,16 @@ HELPER_BUNDLE_ID = f"{APP_BUNDLE_ID}.BoringNotchXPCHelper"
 
 
 class IndependentDistributionTests(unittest.TestCase):
+    def test_app_allows_bundled_sparkle_under_adhoc_release_signing(self):
+        with (ROOT / "boringNotch/boringNotch.entitlements").open("rb") as entitlements_file:
+            entitlements = plistlib.load(entitlements_file)
+        self.assertTrue(entitlements.get("com.apple.security.cs.disable-library-validation"))
+
+    def test_release_builder_checks_library_validation_entitlement_in_signed_app(self):
+        build_script = (ROOT / ".github/scripts/build_fork_dmg.sh").read_text()
+        self.assertIn("codesign --display --entitlements :-", build_script)
+        self.assertIn("com.apple.security.cs.disable-library-validation", build_script)
+
     def test_app_and_helper_use_the_planned_fork_bundle_ids(self):
         project = (ROOT / "boringNotch.xcodeproj/project.pbxproj").read_text()
         self.assertEqual(project.count(f"PRODUCT_BUNDLE_IDENTIFIER = {APP_BUNDLE_ID};"), 2)
@@ -49,7 +59,7 @@ class IndependentDistributionTests(unittest.TestCase):
     def test_project_version_uses_fork_suffix_for_every_target(self):
         project = (ROOT / "boringNotch.xcodeproj/project.pbxproj").read_text()
         versions = re.findall(r"MARKETING_VERSION\s*=\s*([^;]+);", project)
-        self.assertEqual(versions, ["2.7.3-hj.1"] * 4)
+        self.assertEqual(versions, ["2.7.3-hj.2"] * 4)
 
     def test_release_metadata_requires_version_to_match_project_source(self):
         result = subprocess.run(
@@ -61,16 +71,16 @@ class IndependentDistributionTests(unittest.TestCase):
                 "--bundle-identifier",
                 APP_BUNDLE_ID,
                 "--version",
-                "2.7.3-hj.1",
+                "2.7.3-hj.2",
             ],
             capture_output=True,
             text=True,
             check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("tag=v2.7.3-hj.1", result.stdout)
+        self.assertIn("tag=v2.7.3-hj.2", result.stdout)
         self.assertIn("upstream_version=2.7.3", result.stdout)
-        self.assertIn("build_number=272", result.stdout)
+        self.assertIn("build_number=273", result.stdout)
 
         invalid = subprocess.run(
             [
@@ -102,6 +112,7 @@ class IndependentDistributionTests(unittest.TestCase):
             "generate_appcast",
             "appcast.xml",
             "macos-universal.zip",
+            "Fixed an issue that prevented the app from opening after macOS security authorization.",
             "Ensure the build number increases for each release",
             "Build number: $BUILD_NUMBER",
             "BUILD_NUMBER <= LATEST_BUILD",

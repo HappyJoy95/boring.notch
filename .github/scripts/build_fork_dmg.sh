@@ -76,6 +76,14 @@ ACTUAL_BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' \
 
 ditto "$APP_SOURCE" "$APP_DEST"
 codesign --verify --deep --strict "$APP_DEST"
+APP_ENTITLEMENTS_FILE="$RUNNER_TEMP/app-entitlements.plist"
+codesign --display --entitlements :- "$APP_DEST" 2>/dev/null > "$APP_ENTITLEMENTS_FILE"
+LIBRARY_VALIDATION_DISABLED="$(/usr/libexec/PlistBuddy -c \
+  'Print :com.apple.security.cs.disable-library-validation' "$APP_ENTITLEMENTS_FILE")"
+[[ "$LIBRARY_VALIDATION_DISABLED" == "true" ]] || {
+  echo "Built app is missing the required Sparkle library-validation entitlement." >&2
+  exit 1
+}
 
 python3 -m venv "$RUNNER_TEMP/dmg-venv"
 "$RUNNER_TEMP/dmg-venv/bin/python" -m pip install \

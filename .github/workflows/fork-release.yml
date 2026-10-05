@@ -137,6 +137,7 @@ jobs:
 
           ## Fixed
 
+          - Fixed an issue that prevented the app from opening after macOS security authorization.
           - See the changes included in the [source tag](https://github.com/HappyJoy95/boring.notch/tree/$TAG).
 
           ## Known issues

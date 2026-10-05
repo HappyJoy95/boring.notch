@@ -43,7 +43,7 @@
 
 **系统要求：** macOS 14 Sonoma 或更高版本，支持 Apple 芯片和 Intel Mac。
 
-正式版发布后，请从[本仓库的 Releases 页面](https://github.com/HappyJoy95/boring.notch/releases)下载 `boringNotch.dmg`，将 **Boring Notch (HappyJoy95).app** 拖入“应用程序”文件夹。首版计划版本为 `v2.7.3-hj.1`；发布前 Releases 页面可能还没有安装包。此版本不在 App Store 上架。
+请从[本仓库最新 Release](https://github.com/HappyJoy95/boring.notch/releases/latest)下载 `boringNotch.dmg`，将 **Boring Notch (HappyJoy95).app** 拖入“应用程序”文件夹。此版本不在 App Store 上架。
 
 安装后，应用通过 Sparkle 每日自动检查 HappyJoy95 GitHub Releases 中的签名更新 feed，并默认在后台下载更新；也可以在菜单栏或“设置 → 关于”中手动检查，并在“设置 → 关于”调整自动检查和下载选项。更新包使用独立 EdDSA 密钥签名，来源只指向本仓库，不经过 App Store。当前官方 Homebrew Cask 安装的是上游官方版本，不包含本 Fork 的功能；本仓库暂未提供自己的 Homebrew Cask。
 
