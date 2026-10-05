@@ -2,10 +2,10 @@
 
 ## 报告安全漏洞
 
-The Bored Team 和社区非常重视 Boring Notch 的安全问题。感谢你负责任地披露发现的问题，我们会尽力认可并感谢你的贡献。
+HappyJoy95 重视本独立维护版本的安全问题。请通过下方的 GitHub Security Advisory 页面私下报告漏洞，并避免在公开 issue 中披露可利用细节。
 
-请通过 GitHub Security Advisory 页面中的[报告安全漏洞](https://github.com/TheBoredTeam/boring.notch/security/advisories/new)入口提交安全问题。
+请通过 GitHub Security Advisory 页面中的[报告安全漏洞](https://github.com/HappyJoy95/boring.notch/security/advisories/new)入口提交安全问题。
 
-The Bored Team 会回复后续处理步骤。首次回复后，我们会持续告知修复和正式公告的进展，也可能会向你询问更多信息或建议。
+维护者会在确认报告后回复后续处理步骤，并在修复过程中更新进展；如有需要，也会联系你补充信息。
 
 第三方依赖中的安全问题，请报告给对应软件包或依赖的维护者。

@@ -6,7 +6,7 @@ import AsyncXPCConnection
 final class XPCHelperClient: NSObject {
     static let shared = XPCHelperClient()
     
-    private let serviceName = "theboringteam.boringnotch.BoringNotchXPCHelper"
+    private let serviceName = "com.happyjoy95.boringnotch.BoringNotchXPCHelper"
     
     private var remoteService: RemoteXPCService<BoringNotchXPCHelperProtocol>?
     private var connection: NSXPCConnection?
@@ -134,6 +134,7 @@ final class XPCHelperClient: NSObject {
             return false
         }
     }
+
     
     // MARK: - Keyboard Brightness
     

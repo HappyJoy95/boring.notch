@@ -417,7 +417,7 @@ private final class NativeMusicControls {
     }
 }
 
-private let nativeMusicControlQueue = DispatchQueue(label: "theboringteam.boringnotch.native-music-controls", qos: .userInitiated)
+private let nativeMusicControlQueue = DispatchQueue(label: "com.happyjoy95.boringnotch.native-music-controls", qos: .userInitiated)
 
 extension BoringNotchXPCHelper {
     @objc func nativeMusicControl(_ bundleID: String, action: String, with reply: @escaping (Data?) -> Void) {

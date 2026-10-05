@@ -27,6 +27,7 @@ permissions:
 jobs:
   authorize:
     name: Authorize manual build
+    if: ${{ github.repository == 'TheBoredTeam/boring.notch' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -79,7 +80,7 @@ jobs:
             > "$SOURCE_PROJECT"
           SOURCE_BUILD="$(python3 .github/scripts/extract_build_number.py \
             --pbxproj "$SOURCE_PROJECT" \
-            --bundle-identifier theboringteam.boringnotch)"
+            --bundle-identifier com.github.happyjoy95.boringnotch)"
           BUILD_NUMBER="${SOURCE_BUILD}.${RUN_NUMBER}.${RUN_ATTEMPT}"
           echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
           echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"

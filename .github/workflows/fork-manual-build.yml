@@ -1,0 +1,64 @@
+name: Fork Manual Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-manual-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build App and DMG
+    runs-on: macos-26
+    steps:
+      - name: Check out selected source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Read release metadata
+        id: metadata
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/fork_release_metadata.py \
+            --pbxproj boringNotch.xcodeproj/project.pbxproj \
+            --bundle-identifier com.happyjoy95.boringnotch \
+            >> "$GITHUB_OUTPUT"
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build App and DMG
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+        run: ./.github/scripts/build_fork_dmg.sh "$VERSION" "$RUNNER_TEMP/fork-build"
+
+      - name: Write build manifest
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+          BUILD_NUMBER: ${{ steps.metadata.outputs.build_number }}
+          SOURCE_SHA: ${{ steps.metadata.outputs.source_sha }}
+        run: |
+          cat > "$RUNNER_TEMP/fork-build/build-info.txt" <<EOF
+          Version: $VERSION
+          Build: $BUILD_NUMBER
+          Bundle ID: com.happyjoy95.boringnotch
+          Source commit: $SOURCE_SHA
+          Upstream: https://github.com/TheBoredTeam/boring.notch
+          EOF
+
+      - name: Upload App, DMG, and checksum
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Boring-Notch-${{ steps.metadata.outputs.version }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/fork-build/
+          if-no-files-found: error
+          retention-days: 14

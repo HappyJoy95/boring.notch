@@ -1,47 +1,48 @@
-name: Build for macOS
+name: CI
 
 on:
   push:
-    branches:
-      - '*'
+    branches: ["**"]
   pull_request:
-    branches:
-      - '*'
+    branches: ["**"]
 
-# https://stackoverflow.com/a/72408109/6942800
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# Least-privilege: only needs to read code for building.
 permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build Boring Notch
-    strategy:
-      matrix:
-        platform:
-          - macOS
-        xcode:
-          - ^16
-        scheme:
-          - boringNotch
-    # macos-latest now resolves to macos-26, which does not ship Xcode 16.
-    # Keep this legacy main-branch build on an image with the requested toolchain.
-    runs-on: macos-15
+  build-and-test:
+    name: Build and test
+    runs-on: macos-26
     steps:
-    - name: Code Checkout
-      # TODO: pin to immutable SHA
-      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-    - # TODO: pin to immutable SHA
-      uses: mxcl/xcodebuild@d3ee9b419c1be9a988086c58fe0988f32d99cfc5 # v3.6.0
-      with:
-        xcode: ${{ matrix.xcode }}
-        platform: ${{ matrix.platform }}
-        scheme: ${{ matrix.scheme }}
-        action: build
-        verbosity: xcpretty
-        upload-logs: always
-        configuration: release
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Resolve Swift packages
+        run: xcodebuild -resolvePackageDependencies -project boringNotch.xcodeproj -scheme boringNotch
+
+      - name: Build the app
+        run: |
+          set -o pipefail
+          xcodebuild clean build \
+            -project boringNotch.xcodeproj \
+            -scheme boringNotch \
+            -configuration Release \
+            -destination "generic/platform=macOS" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            -quiet
+
+      - name: Run repository tests
+        run: python3 -m unittest discover -s .github/scripts/tests -v

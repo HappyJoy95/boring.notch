@@ -1,0 +1,241 @@
+name: Fork Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Fork version already committed in the Xcode project (for example 2.7.3-hj.1)"
+        required: true
+        type: string
+
+concurrency:
+  group: fork-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish the selected source
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: macos-26
+    steps:
+      - name: Check out selected main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Validate source version and reserve tag
+        id: metadata
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/fork_release_metadata.py \
+            --pbxproj boringNotch.xcodeproj/project.pbxproj \
+            --bundle-identifier com.happyjoy95.boringnotch \
+            --version "$VERSION" >> "$GITHUB_OUTPUT"
+
+          TAG="v${VERSION}"
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            git fetch --no-tags origin "refs/tags/$TAG:refs/tags/$TAG"
+            TAG_SHA="$(git rev-parse "$TAG^{commit}")"
+            if [[ "$TAG_SHA" != "$SOURCE_SHA" ]]; then
+              echo "::error::Tag $TAG already points to $TAG_SHA, not selected source $SOURCE_SHA."
+              exit 1
+            fi
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve the exact upstream version commit
+        id: upstream
+        env:
+          UPSTREAM_VERSION: ${{ steps.metadata.outputs.upstream_version }}
+          SOURCE_SHA: ${{ steps.metadata.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          UPSTREAM_REF="refs/tags/v${UPSTREAM_VERSION}"
+          git fetch --no-tags https://github.com/TheBoredTeam/boring.notch.git "$UPSTREAM_REF"
+          UPSTREAM_SHA="$(git rev-parse 'FETCH_HEAD^{commit}')"
+          if ! git merge-base --is-ancestor "$UPSTREAM_SHA" "$SOURCE_SHA"; then
+            echo "::error::The source commit does not contain upstream v${UPSTREAM_VERSION} ($UPSTREAM_SHA)."
+            exit 1
+          fi
+          echo "commit=$UPSTREAM_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure the build number increases for each release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_NUMBER: ${{ steps.metadata.outputs.build_number }}
+          TAG: ${{ steps.metadata.outputs.tag }}
+        run: |
+          set -euo pipefail
+          LATEST_TAG="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 \
+            --json tagName --jq '.[0].tagName // ""')"
+          if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "$TAG" ]]; then
+            exit 0
+          fi
+
+          LATEST_DIRECTORY="$RUNNER_TEMP/latest-release"
+          mkdir -p "$LATEST_DIRECTORY"
+          gh release download "$LATEST_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern source-manifest.txt --dir "$LATEST_DIRECTORY"
+          LATEST_BUILD="$(sed -n 's/^Build number: //p' "$LATEST_DIRECTORY/source-manifest.txt")"
+          if ! [[ "$LATEST_BUILD" =~ ^[0-9]+$ ]]; then
+            echo "::error::The latest release has no valid build number in its source manifest."
+            exit 1
+          fi
+          if (( BUILD_NUMBER <= LATEST_BUILD )); then
+            echo "::error::Build number $BUILD_NUMBER must be greater than the latest release build $LATEST_BUILD."
+            exit 1
+          fi
+
+      - name: Build App and DMG
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+        run: ./.github/scripts/build_fork_dmg.sh "$VERSION" "$RUNNER_TEMP/fork-release"
+
+      - name: Prepare release notes and source manifest
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+          BUILD_NUMBER: ${{ steps.metadata.outputs.build_number }}
+          TAG: ${{ steps.metadata.outputs.tag }}
+          UPSTREAM_VERSION: ${{ steps.metadata.outputs.upstream_version }}
+          UPSTREAM_SHA: ${{ steps.upstream.outputs.commit }}
+          SOURCE_SHA: ${{ steps.metadata.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          RELEASE_DIRECTORY="$RUNNER_TEMP/fork-release"
+          cat > "$RELEASE_DIRECTORY/release-notes.md" <<EOF
+          ## Based on upstream
+
+          - Project: [TheBoredTeam/boring.notch](https://github.com/TheBoredTeam/boring.notch) v$UPSTREAM_VERSION
+          - Upstream commit: [$UPSTREAM_SHA](https://github.com/TheBoredTeam/boring.notch/commit/$UPSTREAM_SHA)
+          - Fork commit: [$SOURCE_SHA](https://github.com/HappyJoy95/boring.notch/commit/$SOURCE_SHA)
+
+          ## Added
+
+          - Codex, WorkBuddy, DSH, and MiMo Desktop conversation integrations.
+          - QQ Music and NetEase Cloud Music controls, including song likes and playback modes.
+          - Lyrics display and improved music-source matching.
+
+          ## Changed
+
+          - Independent HappyJoy95 application identity and release versioning.
+
+          ## Fixed
+
+          - See the changes included in the [source tag](https://github.com/HappyJoy95/boring.notch/tree/$TAG).
+
+          ## Known issues
+
+          - This build is not notarized. macOS may show a security prompt on first launch.
+
+          ## Updates
+
+          - Sparkle checks the HappyJoy95 GitHub Releases appcast for future updates.
+          - The initial installation is provided as a DMG; in-app updates use the signed universal ZIP.
+
+          ## Source
+
+          - Tag: [\`$TAG\`](https://github.com/HappyJoy95/boring.notch/tree/$TAG)
+          - Fork commit: \`$SOURCE_SHA\`
+
+          ## License
+
+          GNU GPL-3.0. The complete corresponding source is available at the tag above.
+          EOF
+
+          cat > "$RELEASE_DIRECTORY/source-manifest.txt" <<EOF
+          Version: $VERSION
+          Build number: $BUILD_NUMBER
+          Tag: $TAG
+          Bundle ID: com.happyjoy95.boringnotch
+          Upstream version: v$UPSTREAM_VERSION
+          Upstream commit: $UPSTREAM_SHA
+          Fork commit: $SOURCE_SHA
+          License: GNU GPL-3.0
+          EOF
+
+      - name: Generate the signed Sparkle appcast
+        env:
+          SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+          VERSION: ${{ steps.metadata.outputs.version }}
+          TAG: ${{ steps.metadata.outputs.tag }}
+        run: |
+          set -euo pipefail
+          RELEASE_DIRECTORY="$RUNNER_TEMP/fork-release"
+          ARCHIVE_DIRECTORY="$RELEASE_DIRECTORY/sparkle-archives"
+          UPDATE_ARCHIVE="$RELEASE_DIRECTORY/Boring-Notch-${VERSION}-macos-universal.zip"
+          mkdir -p "$ARCHIVE_DIRECTORY"
+          cp "$UPDATE_ARCHIVE" "$ARCHIVE_DIRECTORY/"
+
+          if [[ -z "$SPARKLE_EDDSA_PRIVATE_KEY" ]]; then
+            echo "::error::SPARKLE_EDDSA_PRIVATE_KEY is not configured."
+            exit 1
+          fi
+
+          GENERATE_APPCAST="$(find "$RUNNER_TEMP/DerivedData/SourcePackages/artifacts" \
+            -type f -path '*/Sparkle/bin/generate_appcast' -print -quit)"
+          if [[ -z "$GENERATE_APPCAST" || ! -x "$GENERATE_APPCAST" ]]; then
+            echo "::error::Sparkle generate_appcast was not found after resolving Swift packages."
+            exit 1
+          fi
+
+          printf '%s' "$SPARKLE_EDDSA_PRIVATE_KEY" | "$GENERATE_APPCAST" \
+            --ed-key-file - \
+            --download-url-prefix "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/" \
+            --link "https://github.com/${GITHUB_REPOSITORY}/releases" \
+            "$ARCHIVE_DIRECTORY"
+          cp "$ARCHIVE_DIRECTORY/appcast.xml" "$RELEASE_DIRECTORY/appcast.xml"
+
+      - name: Create the annotated source tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.metadata.outputs.version }}
+          TAG: ${{ steps.metadata.outputs.tag }}
+          TAG_EXISTS: ${{ steps.metadata.outputs.tag_exists }}
+          SOURCE_SHA: ${{ steps.metadata.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          TITLE="Boring Notch Fork v${VERSION}"
+          RELEASE_DIRECTORY="$RUNNER_TEMP/fork-release"
+          DMG_PATH="$RELEASE_DIRECTORY/boringNotch.dmg"
+          CHECKSUM_PATH="$DMG_PATH.sha256"
+          UPDATE_ARCHIVE="$RELEASE_DIRECTORY/Boring-Notch-${VERSION}-macos-universal.zip"
+          UPDATE_CHECKSUM="$UPDATE_ARCHIVE.sha256"
+          APPCAST_PATH="$RELEASE_DIRECTORY/appcast.xml"
+          NOTES_PATH="$RELEASE_DIRECTORY/release-notes.md"
+          MANIFEST_PATH="$RELEASE_DIRECTORY/source-manifest.txt"
+
+          if [[ "$TAG_EXISTS" != "true" ]]; then
+            git tag -a "$TAG" "$SOURCE_SHA" -m "$TITLE"
+            git push origin "$TAG"
+          fi
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$DMG_PATH" "$CHECKSUM_PATH" \
+              "$UPDATE_ARCHIVE" "$UPDATE_CHECKSUM" "$APPCAST_PATH" "$MANIFEST_PATH" \
+              --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "$TITLE" --notes-file "$NOTES_PATH"
+          else
+            gh release create "$TAG" "$DMG_PATH" "$CHECKSUM_PATH" \
+              "$UPDATE_ARCHIVE" "$UPDATE_CHECKSUM" "$APPCAST_PATH" "$MANIFEST_PATH" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$TITLE" \
+              --notes-file "$NOTES_PATH" \
+              --verify-tag
+          fi

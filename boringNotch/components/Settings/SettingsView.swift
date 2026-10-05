@@ -5,6 +5,7 @@
 //  Created by Richard Kunkli on 07/08/2024.
 //
 
+import AppKit
 import AVFoundation
 import Defaults
 import EventKit
@@ -17,7 +18,6 @@ import SwiftUIIntrospect
 struct SettingsView: View {
     @State private var selectedTab = "General"
     @State private var accentColorUpdateTrigger = UUID()
-
     let updaterController: SPUStandardUpdaterController?
 
     init(updaterController: SPUStandardUpdaterController? = nil) {
@@ -97,14 +97,11 @@ struct SettingsView: View {
                 case "Advanced":
                     Advanced()
                 case "About":
-                    if let controller = updaterController {
-                        About(updaterController: controller)
+                    if let updaterController {
+                        About(updaterController: updaterController)
                     } else {
-                        // Fallback with a default controller
-                        About(
-                            updaterController: SPUStandardUpdaterController(
-                                startingUpdater: false, updaterDelegate: nil,
-                                userDriverDelegate: nil))
+                        About(updaterController: SPUStandardUpdaterController(
+                            startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil))
                     }
                 default:
                     GeneralSettings()
@@ -1057,6 +1054,13 @@ struct About: View {
                 }
 
                 UpdaterSettingsView(updater: updaterController.updater)
+                Section {
+                    CheckForUpdatesView(updater: updaterController.updater)
+                    Text("Updates are provided by HappyJoy95 GitHub Releases.")
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Software updates")
+                }
 
                 HStack(spacing: 30) {
                     Spacer(minLength: 0)
@@ -1080,7 +1084,7 @@ struct About: View {
             }
             VStack(spacing: 0) {
                 Divider()
-                Text("Made with 🫶🏻 by not so boring not.people")
+                Text("Independent fork by HappyJoy95 · Based on TheBoredTeam/boring.notch")
                     .foregroundStyle(.secondary)
                     .padding(.top, 5)
                     .padding(.bottom, 7)
@@ -1094,7 +1098,6 @@ struct About: View {
             //                openWindow(id: "onboarding")
             //            }
             //            .controlSize(.extraLarge)
-            CheckForUpdatesView(updater: updaterController.updater)
         }
         .navigationTitle("About")
     }
