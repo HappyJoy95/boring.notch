@@ -50,8 +50,6 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
                bundleID == playbackState.bundleIdentifier {
                 applyNativePlayerState(data)
             }
-            try? await Task.sleep(for: .milliseconds(200))
-            await refreshNativePlayerState()
             return
         }
 
@@ -187,8 +185,6 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
                bundleID == playbackState.bundleIdentifier {
                 applyNativePlayerState(data)
             }
-            try? await Task.sleep(for: .milliseconds(200))
-            await refreshNativePlayerState()
             return
         }
         // AdvanceRepeatMode is the MediaRemote command used by the adapter.

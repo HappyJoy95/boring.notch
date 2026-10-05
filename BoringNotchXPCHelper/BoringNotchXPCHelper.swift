@@ -285,8 +285,14 @@ class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
 }
 
 private final class NativeMusicControls {
+    private struct PlayerSnapshot {
+        let state: [String: Any]
+        let actionableItems: [String: AXUIElement]
+    }
+
     let bundleID: String
     init(_ bundleID: String) { self.bundleID = bundleID }
+
     private func nativeAttribute(_ element: AXUIElement, _ key: String) -> CFTypeRef? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, key as CFString, &value) == .success else { return nil }
@@ -300,17 +306,15 @@ private final class NativeMusicControls {
         return ""
     }
 
-    @discardableResult
-    private func pressNativeMenuItem(_ title: String) -> Bool {
-        // Menu items remain in the accessibility tree while the menu is closed.
-        // Invoke the leaf directly, without moving the pointer or raising a window.
-        if let item = nativePlayerElements().first(where: { nativeLabel($0) == title }),
-           AXUIElementPerformAction(item, kAXPressAction as CFString) == .success {
-            return true
+    private func pressNativeMenuItem(_ title: String, cachedItems: [String: AXUIElement]? = nil) -> Bool {
+        let elements = cachedItems == nil ? nativePlayerElements() : []
+        if let item = cachedItems?[title] ?? elements.first(where: { nativeLabel($0) == title }) {
+            return AXUIElementPerformAction(item, kAXPressAction as CFString) == .success
         }
+
         // Older client builds may only expose items after opening their menu.
         let controlMenu = bundleID == "com.netease.163music" ? "控制" : "播放控制"
-        if let menu = nativePlayerElements().first(where: { nativeLabel($0) == controlMenu }) {
+        if let menu = cachedItems?[controlMenu] ?? elements.first(where: { nativeLabel($0) == controlMenu }) {
             AXUIElementPerformAction(menu, kAXPressAction as CFString)
         }
         if let item = nativePlayerElements().first(where: { nativeLabel($0) == title }) {
@@ -338,11 +342,14 @@ private final class NativeMusicControls {
         return result
     }
 
-
-    func snapshot() -> [String: Any] {
+    private func snapshot() -> PlayerSnapshot {
         var result: [String: Any] = ["favoriteAvailable": false]
+        var actionableItems: [String: AXUIElement] = [:]
+        let labels = Set(["我喜欢", "喜欢歌曲", "取消喜欢", "播放控制", "控制", "单曲循环", "顺序播放", "随机播放", "单曲", "全部", "关"])
+
         for item in nativePlayerElements() {
             let label = nativeLabel(item)
+            if labels.contains(label) { actionableItems[label] = item }
             if label.contains("我喜欢") {
                 result["favoriteAvailable"] = true
                 result["isFavorite"] = !label.contains("添加")
@@ -362,38 +369,58 @@ private final class NativeMusicControls {
                 result["repeatMode"] = label == "单曲" ? 2 : label == "全部" ? 3 : 1
             }
         }
-        return result
+        return PlayerSnapshot(state: result, actionableItems: actionableItems)
     }
 
     func run(_ action: String) -> Data? {
         guard ["com.netease.163music", "com.tencent.QQMusicMac"].contains(bundleID), AXIsProcessTrusted() else { return nil }
-        let before = snapshot()
+        let snapshot = snapshot()
+        var result = snapshot.state
+
         if action == "like" || action == "unlike" {
-            guard let liked = before["isFavorite"] as? Bool else { return nil }
-            if liked != (action == "like") { pressNativeMenuItem(liked ? "取消喜欢" : "喜欢歌曲") }
+            guard let liked = result["isFavorite"] as? Bool else { return nil }
+            let shouldLike = action == "like"
+            if liked != shouldLike {
+                guard pressNativeMenuItem(liked ? "取消喜欢" : "喜欢歌曲", cachedItems: snapshot.actionableItems) else { return nil }
+            }
+            result["favoriteAvailable"] = true
+            result["isFavorite"] = shouldLike
         } else if action == "repeat" {
-            let mode = before["repeatMode"] as? Int ?? 1
-            let shuffled = before["isShuffled"] as? Bool ?? false
+            let mode = result["repeatMode"] as? Int ?? 1
+            let shuffled = result["isShuffled"] as? Bool ?? false
             if bundleID == "com.netease.163music" {
-                // Random -> single track -> playlist -> random.
                 if shuffled {
-                    guard pressNativeMenuItem("随机播放"), pressNativeMenuItem("单曲") else { return nil }
+                    guard pressNativeMenuItem("随机播放", cachedItems: snapshot.actionableItems),
+                          pressNativeMenuItem("单曲") else { return nil }
+                    result["repeatMode"] = 2
+                    result["isShuffled"] = false
                 } else if mode == 2 {
-                    guard pressNativeMenuItem("全部") else { return nil }
+                    guard pressNativeMenuItem("全部", cachedItems: snapshot.actionableItems) else { return nil }
+                    result["repeatMode"] = 3
+                    result["isShuffled"] = false
                 } else {
-                    guard pressNativeMenuItem("随机播放") else { return nil }
+                    guard pressNativeMenuItem("随机播放", cachedItems: snapshot.actionableItems) else { return nil }
+                    result["repeatMode"] = 1
+                    result["isShuffled"] = true
                 }
             } else {
                 let title = shuffled ? "单曲循环" : mode == 2 ? "顺序播放" : "随机播放"
-                guard pressNativeMenuItem(title) else { return nil }
+                guard pressNativeMenuItem(title, cachedItems: snapshot.actionableItems) else { return nil }
+                result["repeatMode"] = shuffled ? 2 : mode == 2 ? 3 : 1
+                result["isShuffled"] = !shuffled && mode != 2
             }
-        } else if action != "state" { return nil }
-        return try? JSONSerialization.data(withJSONObject: snapshot())
+        } else if action != "state" {
+            return nil
+        }
+
+        return try? JSONSerialization.data(withJSONObject: result)
     }
 }
 
+private let nativeMusicControlQueue = DispatchQueue(label: "theboringteam.boringnotch.native-music-controls", qos: .userInitiated)
+
 extension BoringNotchXPCHelper {
     @objc func nativeMusicControl(_ bundleID: String, action: String, with reply: @escaping (Data?) -> Void) {
-        DispatchQueue.main.async { reply(NativeMusicControls(bundleID).run(action)) }
+        nativeMusicControlQueue.async { reply(NativeMusicControls(bundleID).run(action)) }
     }
 }
