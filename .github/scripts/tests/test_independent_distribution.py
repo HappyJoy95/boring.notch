@@ -166,7 +166,8 @@ class IndependentDistributionTests(unittest.TestCase):
             "自动检查",
             "Codex、WorkBuddy、DSH 和 MiMo Desktop",
             "歌词显示",
-            "QQ 音乐和网易云音乐控制",
+            "QQ 音乐控制",
+            "通知镜像",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, readme)
