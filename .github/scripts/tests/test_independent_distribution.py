@@ -59,7 +59,7 @@ class IndependentDistributionTests(unittest.TestCase):
     def test_project_version_uses_fork_suffix_for_every_target(self):
         project = (ROOT / "boringNotch.xcodeproj/project.pbxproj").read_text()
         versions = re.findall(r"MARKETING_VERSION\s*=\s*([^;]+);", project)
-        self.assertEqual(versions, ["2.7.3-hj.2"] * 4)
+        self.assertEqual([version.strip().strip('"') for version in versions], ["2.7.3-hj.3"] * 4)
 
     def test_release_metadata_requires_version_to_match_project_source(self):
         result = subprocess.run(
@@ -71,16 +71,16 @@ class IndependentDistributionTests(unittest.TestCase):
                 "--bundle-identifier",
                 APP_BUNDLE_ID,
                 "--version",
-                "2.7.3-hj.2",
+                "2.7.3-hj.3",
             ],
             capture_output=True,
             text=True,
             check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("tag=v2.7.3-hj.2", result.stdout)
+        self.assertIn("tag=v2.7.3-hj.3", result.stdout)
         self.assertIn("upstream_version=2.7.3", result.stdout)
-        self.assertIn("build_number=273", result.stdout)
+        self.assertIn("build_number=274", result.stdout)
 
         invalid = subprocess.run(
             [
