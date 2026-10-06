@@ -157,6 +157,8 @@ extension Defaults.Keys {
     static let compactHUDDuration = Key<Double>("compactHUDDuration", default: 1.5)
     static let expandedHUDDuration = Key<Double>("expandedHUDDuration", default: 3)
     static let downloadHintDuration = Key<Double>("downloadHintDuration", default: 2)
+    static let notificationJumpToConversation = Key<Bool>("notificationJumpToConversation", default: false)
+    static let notificationDisplayDuration = Key<Double>("notificationDisplayDuration", default: 6)
 
     // MARK: HUD
     static let hudReplacement = Key<Bool>("hudReplacement", default: false)

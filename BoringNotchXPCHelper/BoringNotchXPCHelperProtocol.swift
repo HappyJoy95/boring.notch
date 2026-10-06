@@ -11,6 +11,10 @@ import Foundation
 @objc protocol BoringNotchXPCHelperProtocol {
     func nativeMusicControl(_ bundleID: String, action: String, with reply: @escaping (Data?) -> Void)
     func isAccessibilityAuthorized(with reply: @escaping (Bool) -> Void)
+    func notificationCenterAccessibilitySummary(with reply: @escaping (String) -> Void)
+    func startNotificationBannerMonitoring(with reply: @escaping (Bool) -> Void)
+    func openOriginalNotification(_ text: String, bundleID: String, with reply: @escaping (Bool) -> Void)
+    func stopNotificationBannerMonitoring()
     func requestAccessibilityAuthorization()
     // Keyboard backlight / CoreBrightness access (performed by the helper)
     func isKeyboardBrightnessAvailable(with reply: @escaping (Bool) -> Void)
@@ -40,6 +44,10 @@ import Foundation
     func readPinnedCodexTask(_ threadID: String, with reply: @escaping (Data?) -> Void)
     func interruptCodexTask(_ threadID: String, with reply: @escaping (String?) -> Void)
     func sendCodexInstruction(_ threadID: String, prompt: String, with reply: @escaping (String?) -> Void)
+}
+
+@objc protocol BoringNotchNotificationEventReceiving {
+    func didCaptureNotification(_ identifier: String, text: String, sourceBundleIdentifier: String?, sourceDiagnostics: String, capturedAt: Double, with reply: @escaping (Bool) -> Void)
 }
 
 /*

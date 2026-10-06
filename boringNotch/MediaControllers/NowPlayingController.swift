@@ -179,6 +179,9 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
     }
     
     func toggleRepeat() async {
+        // NetEase repeat control is intentionally unavailable; its menu-based
+        // control path can block and does not reliably report the selected mode.
+        if playbackState.bundleIdentifier == "com.netease.163music" { return }
         if nativePlayerSupported {
             let bundleID = playbackState.bundleIdentifier
             if let data = await XPCHelperClient.shared.nativeMusicControl(bundleID, action: "repeat"),
@@ -260,10 +263,17 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
     // MARK: - Update Methods
     private func handleAdapterUpdate(_ update: NowPlayingUpdate) async {
         let payload = update.payload
-        let diff = update.diff ?? false
+        let adapterDiff = update.diff ?? false
 
         let sourceChanged = (payload.parentApplicationBundleIdentifier ?? payload.bundleIdentifier)
             .map { $0 != playbackState.bundleIdentifier } ?? false
+        let trackChanged = payload.title.map { $0 != playbackState.title } ?? false
+        // Mode-only updates do not describe a new track or a stopped player.
+        // Keep track metadata when the adapter omits it for the same active source.
+        let modeOnlyUpdate = !sourceChanged && nativePlayerSupported
+            && payload.title == nil
+            && (payload.repeatMode != nil || payload.shuffleMode != nil)
+        let diff = adapterDiff || modeOnlyUpdate
         if let supportsIsLiked = payload.supportsIsLiked {
             mediaRemoteSupportsFavorite = supportsIsLiked
         } else if !diff || sourceChanged {
@@ -293,24 +303,26 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
         
         if let shuffleMode = payload.shuffleMode {
             newPlaybackState.isShuffled = shuffleMode != 1
-        } else if !diff {
-            newPlaybackState.isShuffled = false
-        } else {
+        } else if diff {
             newPlaybackState.isShuffled = self.playbackState.isShuffled
+        } else {
+            newPlaybackState.isShuffled = false
         }
         if let repeatModeValue = payload.repeatMode {
             newPlaybackState.repeatMode = RepeatMode(rawValue: repeatModeValue) ?? .off
-        } else if !diff {
-            newPlaybackState.repeatMode = .off
-        } else {
+        } else if diff {
             newPlaybackState.repeatMode = self.playbackState.repeatMode
+        } else {
+            newPlaybackState.repeatMode = .off
         }
 
         if let artworkDataString = payload.artworkData {
             newPlaybackState.artwork = Data(
                 base64Encoded: artworkDataString.trimmingCharacters(in: .whitespacesAndNewlines)
             )
-        } else if !diff {
+        } else if diff && !sourceChanged {
+            newPlaybackState.artwork = self.playbackState.artwork
+        } else {
             newPlaybackState.artwork = nil
         }
 
@@ -340,16 +352,21 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
         if sourceChanged { nativeFavoriteAvailable = false }
         
         self.playbackState = newPlaybackState
-        await refreshNativePlayerState()
+        if nativePlayerSupported,
+           sourceChanged || trackChanged || Date().timeIntervalSince(nativePlayerStateLastRefresh) >= 3 {
+            await refreshNativePlayerState()
+        }
         
         // Fetch favorite state for supported apps asynchronously
         // await fetchFavoriteStateIfSupported()
     }
     
     private var nativeFavoriteAvailable = false
+    private var nativePlayerStateLastRefresh = Date.distantPast
 
     private func refreshNativePlayerState() async {
         guard nativePlayerSupported else { return }
+        nativePlayerStateLastRefresh = Date()
         let bundleID = playbackState.bundleIdentifier
         guard let data = await XPCHelperClient.shared.nativeMusicControl(bundleID, action: "state"),
               bundleID == playbackState.bundleIdentifier else { return }

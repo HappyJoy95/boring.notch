@@ -66,12 +66,13 @@ struct ContentView: View {
     private var computedChinWidth: CGFloat {
         var chinWidth: CGFloat = vm.closedNotchSize.width
 
-        if coordinator.codexStatusEvent != nil && vm.notchState == .closed && !vm.hideOnClosed {
-            chinWidth = min(420, vm.closedNotchSize.width + 180)
-        } else if coordinator.expandingView.type == .battery && coordinator.expandingView.show
+        if coordinator.expandingView.type == .battery && coordinator.expandingView.show
             && vm.notchState == .closed && Defaults[.showPowerStatusNotifications]
         {
             chinWidth = 640
+
+        } else if coordinator.codexStatusEvent != nil && vm.notchState == .closed && !vm.hideOnClosed {
+            chinWidth = min(420, vm.closedNotchSize.width + 180)
         } else if (!coordinator.expandingView.show || coordinator.expandingView.type == .music)
             && vm.notchState == .closed && (musicManager.isPlaying || !musicManager.isPlayerIdle)
             && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed
@@ -109,15 +110,8 @@ struct ContentView: View {
                     .padding(.horizontal, vm.notchState == .open ? 12 : 0)
                     .padding(.bottom, vm.notchState == .open ? (coordinator.currentView == .agent ? 6 : 12) : 0)
                     .background(alignment: .top) {
-                        GeometryReader { geometry in
-                            // Keep one opaque surface while playback expands or collapses.
-                            currentNotchShape
-                                .fill(.black)
-                                .frame(
-                                    width: geometry.size.width,
-                                    height: geometry.size.height + (shouldShowCollapsedLyrics ? chinContentHeight : 0),
-                                    alignment: .top
-                                )
+                        if !shouldShowBottomExtension {
+                            currentNotchShape.fill(.black)
                         }
                     }
                     .overlay(alignment: .top) {
@@ -126,7 +120,7 @@ struct ContentView: View {
                             .frame(height: 1)
                             .padding(.horizontal, topCornerRadius)
                     }
-                    .conditionalModifier(vm.notchState == .open) { view in
+                    .conditionalModifier(vm.notchState == .open && !shouldShowNotificationExtension) { view in
                         view.clipShape(currentNotchShape)
                     }
                     .padding(
@@ -135,7 +129,8 @@ struct ContentView: View {
                     )
                 
                 mainLayout
-                    .frame(height: vm.notchState == .open ? vm.notchSize.height : nil, alignment: .top)
+                    .fixedSize(horizontal: false, vertical: compactOpenHomeForNotification)
+                    .frame(height: mainLayoutHeight, alignment: .top)
                     .background {
                         CodexTaskPanelAnchor(isPresented:
                             vm.notchState == .open && coordinator.currentView == .agent
@@ -258,7 +253,11 @@ struct ContentView: View {
                         }
                     }
                     .onChange(of: vm.isBatteryPopoverActive) {
-                        if !vm.isBatteryPopoverActive && !isHovering && vm.notchState == .open && !SharingStateManager.shared.preventNotchClose {
+                        let shouldCloseExpandedNotch = !vm.isBatteryPopoverActive
+                            && !isHovering
+                            && vm.notchState == .open
+                            && !SharingStateManager.shared.preventNotchClose
+                        if shouldCloseExpandedNotch {
                             hoverTask?.cancel()
                             hoverTask = Task {
                                 try? await Task.sleep(for: .milliseconds(100))
@@ -287,16 +286,26 @@ struct ContentView: View {
                     }
                 // Keep the row mounted so its height contracts instead of fading out.
                 Rectangle()
-                        .fill(shouldShowCollapsedLyrics ? Color.clear : Color.black.opacity(0.01))
+                        .fill(shouldShowBottomExtension ? Color.clear : Color.black.opacity(0.01))
                         .overlay {
-                            if shouldShowCollapsedLyrics {
-                                CollapsedLyricsView()
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .transition(.identity)
+                            VStack(spacing: 0) {
+                                if shouldShowCollapsedLyrics {
+                                    CollapsedLyricsView()
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: collapsedMusicCaptionHeight)
+                                        .transition(.identity)
+                                }
+                                if shouldShowNotificationExtension,
+                                   let notification = coordinator.mirroredNotification {
+                                    MirroredNotificationActivityView(notification: notification)
+                                        .padding(.horizontal, vm.notchState == .open ? 20 : 0)
+                                        .frame(height: notificationExtensionHeight)
+                                        .transition(.opacity)
+                                }
                             }
                         }
                         .frame(width: chinContentWidth, height: chinContentHeight)
-                        .conditionalModifier(!shouldShowCollapsedLyrics) { view in
+                        .conditionalModifier(!shouldShowBottomExtension) { view in
                             view.clipShape(
                                 UnevenRoundedRectangle(
                                     cornerRadii: RectangleCornerRadii(
@@ -312,6 +321,17 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .clipped()
             }
+            .frame(width: shouldShowBottomExtension
+                ? (vm.notchState == .open ? vm.notchSize.width
+                    : shouldShowCollapsedLyrics ? collapsedPlaybackWidth
+                    : computedChinWidth + 2 * cornerRadiusInsets.closed.bottom)
+                : nil)
+            .background {
+                if shouldShowBottomExtension {
+                    // Size the shared surface from the complete stack, including the fixed open frame.
+                    currentNotchShape.fill(.black)
+                }
+            }
             .shadow(
                 color: ((vm.notchState == .open || isHovering) && Defaults[.enableShadow])
                     ? .black.opacity(0.7) : .clear,
@@ -325,6 +345,7 @@ struct ContentView: View {
             )
             .animation(.smooth, value: musicManager.isPlayerIdle)
             .animation(.smooth, value: shouldShowCollapsedLyrics)
+            .animation(.smooth, value: coordinator.mirroredNotification)
             .animation(.smooth, value: coordinator.sneakPeek.show)
         }
         .padding(.bottom, 8)
@@ -382,12 +403,36 @@ struct ContentView: View {
         return true
     }
 
+    private var mainLayoutHeight: CGFloat? {
+        guard vm.notchState == .open, !compactOpenHomeForNotification else { return nil }
+        return vm.notchSize.height
+    }
+
+    private var compactOpenHomeForNotification: Bool {
+        guard shouldShowNotificationExtension, vm.notchState == .open, coordinator.currentView == .home,
+              !Defaults[.showCalendar] else { return false }
+        let hasExpandedCamera = Defaults[.showMirror] && WebcamManager.shared.cameraAvailable && vm.isCameraExpanded
+        return !hasExpandedCamera
+    }
+
+    private var shouldShowNotificationExtension: Bool {
+        coordinator.mirroredNotification != nil
+            && (vm.notchState == .open || !vm.hideOnClosed)
+    }
+
+    private var shouldShowBottomExtension: Bool {
+        shouldShowCollapsedLyrics || shouldShowNotificationExtension
+    }
+
     private var chinContentHeight: CGFloat {
-        max(vm.chinHeight, shouldShowCollapsedLyrics ? collapsedMusicCaptionHeight : 0)
+        let lyricsHeight = shouldShowCollapsedLyrics ? collapsedMusicCaptionHeight : 0
+        let notificationHeight = shouldShowNotificationExtension ? notificationExtensionHeight : 0
+        return max(vm.chinHeight, lyricsHeight + notificationHeight)
     }
 
     private var chinContentWidth: CGFloat {
-        shouldShowCollapsedLyrics
+        if vm.notchState == .open { return vm.notchSize.width }
+        return shouldShowCollapsedLyrics
             ? collapsedPlaybackWidth - 2 * cornerRadiusInsets.closed.top
             : computedChinWidth
     }
@@ -447,6 +492,7 @@ struct ContentView: View {
                             .frame(width: 76, alignment: .trailing)
                         }
                         .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
+
                       } else if let codexEvent = coordinator.codexStatusEvent, vm.notchState == .closed, !vm.hideOnClosed {
                           CodexStatusActivityView(event: codexEvent)
                               .frame(width: min(420, vm.closedNotchSize.width + 180), height: vm.effectiveClosedNotchHeight)

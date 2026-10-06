@@ -34,6 +34,17 @@ struct SharedSneakPeek: Codable {
     var icon: String
 }
 
+enum NotificationMirroringPreferences {
+    static let enabledKey = "visibleNotificationMirroringEnabled"
+}
+
+struct MirroredNotificationActivity: Identifiable, Equatable {
+    let id: String
+    let text: String
+    let sourceBundleIdentifier: String?
+    let receivedAt: Date
+}
+
 enum BrowserType {
     case chromium
     case safari
@@ -56,6 +67,8 @@ class BoringViewCoordinator: ObservableObject {
     @Published var helloAnimationRunning: Bool = false
     @Published private(set) var codexPinnedTasks: [CodexPinnedTask] = []
     @Published private(set) var codexStatusEvent: CodexActivityEvent?
+    @Published private(set) var mirroredNotification: MirroredNotificationActivity?
+    @Published private(set) var notificationSourceStatus = ""
     @Published private(set) var codexUnreadTaskIDs = Set<String>()
     @Published private(set) var codexCompletionReminder: UUID?
     @Published private(set) var codexHighlightedTaskIDs = Set<String>()
@@ -69,6 +82,7 @@ class BoringViewCoordinator: ObservableObject {
 
     private var activityArbiter = ActivityArbiter()
     private var codexStatusExpiryTask: Task<Void, Never>?
+    private var mirroredNotificationExpiryTask: Task<Void, Never>?
     private var sneakPeekDispatch: DispatchWorkItem?
     private var expandingViewDispatch: DispatchWorkItem?
     private var hudEnableTask: Task<Void, Never>?
@@ -260,6 +274,35 @@ class BoringViewCoordinator: ObservableObject {
         codexStatusExpiryTask?.cancel()
         codexStatusExpiryTask = nil
         codexStatusEvent = nil
+    }
+
+    func receiveMirroredNotification(identifier: String, text: String, sourceBundleIdentifier: String?, sourceDiagnostics: String, capturedAt: Date) {
+        let boundedText = String(text.prefix(2400)).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard UserDefaults.standard.bool(forKey: NotificationMirroringPreferences.enabledKey),
+              !identifier.isEmpty, !boundedText.isEmpty else { return }
+
+        if let bundleID = sourceBundleIdentifier {
+            let foundIcon = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil
+            notificationSourceStatus = "来源：\(bundleID)；系统图标\(foundIcon ? "可用" : "未找到")。\(sourceDiagnostics)"
+        } else {
+            notificationSourceStatus = "来源未识别，使用铃铛图标。\(sourceDiagnostics)"
+        }
+        mirroredNotificationExpiryTask?.cancel()
+        mirroredNotification = MirroredNotificationActivity(id: identifier, text: boundedText, sourceBundleIdentifier: sourceBundleIdentifier, receivedAt: capturedAt)
+        let configuredDuration = Defaults[.notificationDisplayDuration]
+        let duration = configuredDuration.isFinite ? min(30, max(1, configuredDuration)) : 6
+        mirroredNotificationExpiryTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(duration))
+            guard !Task.isCancelled, self?.mirroredNotification?.id == identifier else { return }
+            self?.mirroredNotification = nil
+            self?.mirroredNotificationExpiryTask = nil
+        }
+    }
+
+    func clearMirroredNotification() {
+        mirroredNotificationExpiryTask?.cancel()
+        mirroredNotificationExpiryTask = nil
+        mirroredNotification = nil
     }
     
     @objc func sneakPeekEvent(_ notification: Notification) {

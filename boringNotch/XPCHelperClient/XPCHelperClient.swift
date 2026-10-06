@@ -27,6 +27,8 @@ final class XPCHelperClient: NSObject {
         }
         
         let conn = NSXPCConnection(serviceName: serviceName)
+        conn.exportedInterface = NSXPCInterface(with: BoringNotchNotificationEventReceiving.self)
+        conn.exportedObject = NotificationEventReceiver.shared
         
         conn.interruptionHandler = { [weak self] in
             Task { @MainActor in
@@ -135,6 +137,42 @@ final class XPCHelperClient: NSObject {
         }
     }
 
+    func notificationCenterAccessibilitySummary() async -> String {
+        do {
+            let service = ensureRemoteService()
+            return try await service.withContinuation { service, continuation in
+                service.notificationCenterAccessibilitySummary { summary in
+                    continuation.resume(returning: summary)
+                }
+            }
+        } catch { return "xpcError=\(error.localizedDescription)" }
+    }
+
+    func startNotificationBannerMonitoring() async -> Bool {
+        do {
+            let service = ensureRemoteService()
+            return try await service.withContinuation { service, continuation in
+                service.startNotificationBannerMonitoring { started in
+                    continuation.resume(returning: started)
+                }
+            }
+        } catch { return false }
+    }
+
+    func openOriginalNotification(text: String, bundleID: String) async -> Bool {
+        do {
+            return try await ensureRemoteService().withContinuation { service, continuation in
+                service.openOriginalNotification(text, bundleID: bundleID) { continuation.resume(returning: $0) }
+            }
+        } catch { return false }
+    }
+
+    func stopNotificationBannerMonitoring() async {
+        guard let service = getRemoteService() else { return }
+        try? await service.withService { service in
+            service.stopNotificationBannerMonitoring()
+        }
+    }
     
     // MARK: - Keyboard Brightness
     
@@ -411,6 +449,26 @@ final class XPCHelperClient: NSObject {
             }
         } catch {
             return error.localizedDescription
+        }
+    }
+}
+
+private final class NotificationEventReceiver: NSObject, BoringNotchNotificationEventReceiving {
+    static let shared = NotificationEventReceiver()
+
+    func didCaptureNotification(_ identifier: String, text: String, sourceBundleIdentifier: String?, sourceDiagnostics: String, capturedAt: Double, with reply: @escaping (Bool) -> Void) {
+        let boundedText = String(text.prefix(2400)).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard UserDefaults.standard.bool(forKey: NotificationMirroringPreferences.enabledKey),
+              !identifier.isEmpty, !boundedText.isEmpty else { reply(false); return }
+        Task { @MainActor in
+            BoringViewCoordinator.shared.receiveMirroredNotification(
+                identifier: identifier,
+                text: boundedText,
+                sourceBundleIdentifier: sourceBundleIdentifier,
+                sourceDiagnostics: sourceDiagnostics,
+                capturedAt: Date(timeIntervalSince1970: capturedAt)
+            )
+            reply(true)
         }
     }
 }

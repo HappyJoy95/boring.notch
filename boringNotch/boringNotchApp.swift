@@ -71,6 +71,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         Task { @MainActor in CodexActivityReceiver.shared.stop() }
+        Task { @MainActor in await XPCHelperClient.shared.stopNotificationBannerMonitoring() }
         NotificationCenter.default.removeObserver(self)
         if let observer = screenLockedObserver {
             DistributedNotificationCenter.default().removeObserver(observer)
@@ -278,6 +279,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+
+        Task {
+            let summary = await XPCHelperClient.shared.notificationCenterAccessibilitySummary()
+            let path = FileManager.default.temporaryDirectory.appendingPathComponent("boringnotch_ax_summary.txt")
+            try? summary.write(to: path, atomically: true, encoding: .utf8)
+        }
+
+        Task { @MainActor in
+            guard UserDefaults.standard.bool(forKey: NotificationMirroringPreferences.enabledKey),
+                  await XPCHelperClient.shared.isAccessibilityAuthorized() else { return }
+            _ = await XPCHelperClient.shared.startNotificationBannerMonitoring()
+        }
 
         Task { @MainActor in
             CodexActivityReceiver.shared.start()

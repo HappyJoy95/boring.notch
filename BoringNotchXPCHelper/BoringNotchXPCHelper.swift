@@ -12,14 +12,73 @@ import IOKit
 import CoreGraphics
 
 class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
+    private weak var connection: NSXPCConnection?
+    private var notificationBannerWatcher: NotificationBannerWatcher?
+
+    init(connection: NSXPCConnection) {
+        self.connection = connection
+        super.init()
+    }
+
+    deinit {
+        notificationBannerWatcher?.stop()
+    }
     
     @objc func isAccessibilityAuthorized(with reply: @escaping (Bool) -> Void) {
         reply(AXIsProcessTrusted())
     }
 
+    @objc func notificationCenterAccessibilitySummary(with reply: @escaping (String) -> Void) {
+        guard AXIsProcessTrusted() else { reply("trusted=false"); return }
+        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.notificationcenterui").first else {
+            reply("trusted=true notificationCenterProcess=missing")
+            return
+        }
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        var count = 0, titled = 0, valued = 0
+        var roles: Set<String> = []
+        func visit(_ element: AXUIElement, _ depth: Int) {
+            guard depth < 12, count < 2000 else { return }
+            count += 1
+            var value: CFTypeRef?
+            if AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &value) == .success,
+               let role = value as? String { roles.insert(role) }
+            if AXUIElementCopyAttributeValue(element, kAXTitleAttribute as CFString, &value) == .success,
+               value is String { titled += 1 }
+            if AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success,
+               value is String { valued += 1 }
+            if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &value) == .success,
+               let children = value as? [AXUIElement] {
+                for child in children { visit(child, depth + 1) }
+            }
+        }
+        visit(root, 0)
+        reply("trusted=true pid=\(app.processIdentifier) elements=\(count) titled=\(titled) valued=\(valued) roles=\(roles.sorted().joined(separator: ","))")
+    }
+
+    @objc func openOriginalNotification(_ text: String, bundleID: String, with reply: @escaping (Bool) -> Void) {
+        NotificationBannerWatcher.openOriginal(text: text, bundleID: bundleID, reply: reply)
+    }
+
     @objc func requestAccessibilityAuthorization() {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
+    }
+
+    @objc func startNotificationBannerMonitoring(with reply: @escaping (Bool) -> Void) {
+        guard AXIsProcessTrusted(), let connection else { reply(false); return }
+        DispatchQueue.main.async {
+            let watcher = self.notificationBannerWatcher ?? NotificationBannerWatcher(connection: connection)
+            self.notificationBannerWatcher = watcher
+            reply(watcher.start())
+        }
+    }
+
+    @objc func stopNotificationBannerMonitoring() {
+        DispatchQueue.main.async {
+            self.notificationBannerWatcher?.stop()
+            self.notificationBannerWatcher = nil
+        }
     }
 
     private class KeyboardBrightnessClient {
@@ -294,13 +353,16 @@ private final class NativeMusicControls {
     init(_ bundleID: String) { self.bundleID = bundleID }
 
     private func nativeAttribute(_ element: AXUIElement, _ key: String) -> CFTypeRef? {
+        _ = AXUIElementSetMessagingTimeout(element, 0.25)
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, key as CFString, &value) == .success else { return nil }
         return value
     }
 
     private func nativeLabel(_ element: AXUIElement) -> String {
-        for key in [kAXDescriptionAttribute, kAXTitleAttribute] {
+        let isMenuItem = nativeAttribute(element, kAXRoleAttribute) as? String == kAXMenuItemRole as String
+        let keys = isMenuItem ? [kAXTitleAttribute, kAXDescriptionAttribute] : [kAXDescriptionAttribute, kAXTitleAttribute]
+        for key in keys {
             if let value = nativeAttribute(element, key) as? String, !value.isEmpty { return value }
         }
         return ""
@@ -329,27 +391,133 @@ private final class NativeMusicControls {
         var result: [AXUIElement] = []
         func visit(_ element: AXUIElement, depth: Int) {
             guard depth < 12, result.count < 1500 else { return }
+            guard !result.contains(where: { CFEqual($0, element) }) else { return }
             result.append(element)
             for child in nativeAttribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? [] {
                 visit(child, depth: depth + 1)
             }
         }
         let root = AXUIElementCreateApplication(app.processIdentifier)
-        visit(root, depth: 0)
-        if let menu = nativeAttribute(root, kAXMenuBarAttribute) {
+        _ = AXUIElementSetMessagingTimeout(root, 0.25)
+        // Read QQ Music from its compact native menu bar; traversing the CEF window
+        // on every playback update was expensive and could block the control queue.
+        if let menu = nativeAttribute(root, kAXMenuBarAttribute),
+           CFGetTypeID(menu) == AXUIElementGetTypeID() {
             visit(menu as! AXUIElement, depth: 0)
         }
+        if bundleID != "com.tencent.QQMusicMac" { visit(root, depth: 0) }
         return result
     }
 
+    private func qqPlaybackControls() -> [AXUIElement] {
+        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first else { return [] }
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        _ = AXUIElementSetMessagingTimeout(root, 0.2)
+        let windows = nativeAttribute(root, kAXWindowsAttribute) as? [AXUIElement] ?? []
+        var pending = windows.map { ($0, 0) }
+        var seen = 0
+        while !pending.isEmpty && seen < 100 {
+            let (element, depth) = pending.removeFirst()
+            seen += 1
+            let role = nativeAttribute(element, kAXRoleAttribute) as? String ?? ""
+            // QQ Music exposes its playback panel as AXUnknown, not AXPanel.
+            if nativeLabel(element).contains("播放控制栏") {
+                return nativeAttribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? []
+            }
+            // The main window contains a large CEF song list; skip it and only
+            // inspect the shallow native panels around the playback controls.
+            if depth >= 4 || ["AXScrollArea", "AXTable", "AXWebArea", "AXHTMLArea"].contains(role) { continue }
+            for child in nativeAttribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? [] {
+                pending.append((child, depth + 1))
+            }
+        }
+        return []
+    }
+
+    private func qqPlaybackModeMenuItems() -> [String: AXUIElement] {
+        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first else { return [:] }
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        guard let menuBar = nativeAttribute(root, kAXMenuBarAttribute),
+              CFGetTypeID(menuBar) == AXUIElementGetTypeID() else { return [:] }
+        let topLevelItems = nativeAttribute(menuBar as! AXUIElement, kAXChildrenAttribute) as? [AXUIElement] ?? []
+        guard let playbackMenu = topLevelItems.first(where: { nativeLabel($0) == "播放控制" }) else { return [:] }
+        for menu in nativeAttribute(playbackMenu, kAXChildrenAttribute) as? [AXUIElement] ?? [] {
+            let menuItems = nativeAttribute(menu, kAXChildrenAttribute) as? [AXUIElement] ?? []
+            guard let modeItem = menuItems.first(where: { nativeLabel($0) == "播放模式" }) else { continue }
+            for submenu in nativeAttribute(modeItem, kAXChildrenAttribute) as? [AXUIElement] ?? [] {
+                let choices = nativeAttribute(submenu, kAXChildrenAttribute) as? [AXUIElement] ?? []
+                return Dictionary(uniqueKeysWithValues: choices.compactMap { item in
+                    let title = nativeLabel(item)
+                    return ["随机播放", "单曲循环", "顺序播放"].contains(title) ? (title, item) : nil
+                })
+            }
+        }
+        return [:]
+    }
+
+    private func qqPlaybackModeState(_ items: [String: AXUIElement]) -> [String: Any]? {
+        for (title, item) in items {
+            guard let mark = nativeAttribute(item, "AXMenuItemMarkChar") as? String, !mark.isEmpty else { continue }
+            switch title {
+            case "随机播放": return ["repeatMode": 1, "isShuffled": true]
+            case "单曲循环": return ["repeatMode": 2, "isShuffled": false]
+            case "顺序播放": return ["repeatMode": 3, "isShuffled": false]
+            default: continue
+            }
+        }
+        return nil
+    }
+
+    private func quickQQSnapshot() -> PlayerSnapshot? {
+        let controls = qqPlaybackControls()
+        guard !controls.isEmpty else { return nil }
+        var state: [String: Any] = ["favoriteAvailable": false]
+        var actionable: [String: AXUIElement] = [:]
+        for control in controls {
+            let label = nativeLabel(control)
+            if label.contains("播放模式（") { actionable["__repeatButton"] = control }
+            if label.contains("我喜欢") {
+                state["favoriteAvailable"] = true
+                state["isFavorite"] = !label.contains("添加")
+            }
+        }
+        if let button = actionable["__repeatButton"] {
+            let label = nativeLabel(button)
+            if label.contains("随机") { state["repeatMode"] = 1; state["isShuffled"] = true }
+            else if label.contains("单曲") { state["repeatMode"] = 2; state["isShuffled"] = false }
+            else if label.contains("顺序") { state["repeatMode"] = 3; state["isShuffled"] = false }
+        }
+        if let menuState = qqPlaybackModeState(qqPlaybackModeMenuItems()) {
+            state.merge(menuState) { _, menuValue in menuValue }
+        }
+        return PlayerSnapshot(state: state, actionableItems: actionable)
+    }
+
     private func snapshot() -> PlayerSnapshot {
+        if bundleID == "com.tencent.QQMusicMac", let quick = quickQQSnapshot() { return quick }
         var result: [String: Any] = ["favoriteAvailable": false]
         var actionableItems: [String: AXUIElement] = [:]
+        var menuState: [String: Any] = [:]
         let labels = Set(["我喜欢", "喜欢歌曲", "取消喜欢", "播放控制", "控制", "单曲循环", "顺序播放", "随机播放", "单曲", "全部", "关"])
 
         for item in nativePlayerElements() {
             let label = nativeLabel(item)
-            if labels.contains(label) { actionableItems[label] = item }
+            let isMenuItem = nativeAttribute(item, kAXRoleAttribute) as? String == kAXMenuItemRole as String
+            if labels.contains(label), actionableItems[label] == nil { actionableItems[label] = item }
+            if bundleID == "com.tencent.QQMusicMac",
+               nativeAttribute(item, kAXRoleAttribute) as? String == kAXMenuItemRole as String,
+               nativeAttribute(item, kAXEnabledAttribute) as? Bool == true {
+                // QQ Music keeps these menu items available even with no windows.
+                if label == "喜欢歌曲" || label == "取消喜欢" {
+                    menuState["favoriteAvailable"] = true
+                    menuState["isFavorite"] = label == "取消喜欢"
+                }
+                if ["随机播放", "单曲循环", "顺序播放"].contains(label),
+                   let mark = nativeAttribute(item, "AXMenuItemMarkChar") as? String, !mark.isEmpty {
+                    menuState["repeatMode"] = label == "单曲循环" ? 2 : label == "顺序播放" ? 3 : 1
+                    menuState["isShuffled"] = label == "随机播放"
+                }
+            }
             if label.contains("我喜欢") {
                 result["favoriteAvailable"] = true
                 result["isFavorite"] = !label.contains("添加")
@@ -362,18 +530,34 @@ private final class NativeMusicControls {
             if label.contains("播放模式（") {
                 result["repeatMode"] = label.contains("单曲") ? 2 : label.contains("随机") ? 1 : 3
                 result["isShuffled"] = label.contains("随机")
-            } else if label == "随机播放", bundleID == "com.netease.163music" {
-                result["isShuffled"] = (nativeAttribute(item, "AXMenuItemMarkChar") as? String).map { !$0.isEmpty } ?? false
-            } else if ["关", "单曲", "全部"].contains(label),
+            } else if label == "随机播放", bundleID == "com.netease.163music", isMenuItem {
+                menuState["isShuffled"] = (nativeAttribute(item, "AXMenuItemMarkChar") as? String).map { !$0.isEmpty } ?? false
+            } else if bundleID == "com.netease.163music", isMenuItem,
+                      ["关", "单曲", "全部"].contains(label),
                       let mark = nativeAttribute(item, "AXMenuItemMarkChar") as? String, !mark.isEmpty {
-                result["repeatMode"] = label == "单曲" ? 2 : label == "全部" ? 3 : 1
+                menuState["repeatMode"] = label == "单曲" ? 2 : label == "全部" ? 3 : 1
             }
         }
+        // Verified menu state takes precedence over window controls when both exist.
+        result.merge(menuState) { _, menuValue in menuValue }
         return PlayerSnapshot(state: result, actionableItems: actionableItems)
     }
 
     func run(_ action: String) -> Data? {
         guard ["com.netease.163music", "com.tencent.QQMusicMac"].contains(bundleID), AXIsProcessTrusted() else { return nil }
+        if action == "repeat", bundleID == "com.tencent.QQMusicMac" {
+            let modeItems = qqPlaybackModeMenuItems()
+            guard let current = qqPlaybackModeState(modeItems),
+                  let mode = current["repeatMode"] as? Int else { return nil }
+            let nextTitle = mode == 1 ? "单曲循环" : mode == 2 ? "顺序播放" : "随机播放"
+            guard let nextItem = modeItems[nextTitle],
+                  AXUIElementPerformAction(nextItem, kAXPressAction as CFString) == .success else { return nil }
+            let result: [String: Any] = [
+                "repeatMode": mode == 1 ? 2 : mode == 2 ? 3 : 1,
+                "isShuffled": mode == 3
+            ]
+            return try? JSONSerialization.data(withJSONObject: result)
+        }
         let snapshot = snapshot()
         var result = snapshot.state
 
@@ -386,8 +570,8 @@ private final class NativeMusicControls {
             result["favoriteAvailable"] = true
             result["isFavorite"] = shouldLike
         } else if action == "repeat" {
-            let mode = result["repeatMode"] as? Int ?? 1
-            let shuffled = result["isShuffled"] as? Bool ?? false
+            guard let mode = result["repeatMode"] as? Int,
+                  let shuffled = result["isShuffled"] as? Bool else { return nil }
             if bundleID == "com.netease.163music" {
                 if shuffled {
                     guard pressNativeMenuItem("随机播放", cachedItems: snapshot.actionableItems),
@@ -413,6 +597,12 @@ private final class NativeMusicControls {
             return nil
         }
 
+        if action == "repeat" {
+            // Menu actions can update asynchronously. Publish only a fresh observed state,
+            // rather than the mode predicted by the command sequence above.
+            Thread.sleep(forTimeInterval: 0.15)
+            result = self.snapshot().state
+        }
         return try? JSONSerialization.data(withJSONObject: result)
     }
 }

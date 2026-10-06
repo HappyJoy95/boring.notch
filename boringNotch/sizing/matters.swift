@@ -13,6 +13,7 @@ let downloadSneakSize: CGSize = .init(width: 65, height: 1)
 let batterySneakSize: CGSize = .init(width: 160, height: 1)
 
 let shadowPadding: CGFloat = 20
+let notificationExtensionHeight: CGFloat = 64
 let openNotchSize: CGSize = .init(width: 640, height: 190)
 let homeQuotaNotchSize: CGSize = .init(width: openNotchSize.width, height: 355)
 // Matching nested corners: outer radius = card radius + visible inset.
@@ -22,7 +23,8 @@ let agentOuterCornerRadius: CGFloat = agentCardCornerRadius + agentCardInset
 let compactCodexNotchSize: CGSize = .init(width: openNotchSize.width, height: 190)
 let windowSize: CGSize = .init(
     width: openNotchSize.width,
-    height: max(homeQuotaNotchSize.height, compactCodexNotchSize.height) + shadowPadding
+    height: max(homeQuotaNotchSize.height, compactCodexNotchSize.height)
+        + notificationExtensionHeight + shadowPadding
 )
 
 func expandedNotchSize(for view: NotchViews, hasPinnedTasks: Bool) -> CGSize {

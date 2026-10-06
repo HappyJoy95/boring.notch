@@ -623,6 +623,7 @@ struct HUD: View {
     @Default(.compactHUDDuration) private var compactHUDDuration
     @Default(.expandedHUDDuration) private var expandedHUDDuration
     @Default(.downloadHintDuration) private var downloadHintDuration
+    @Default(.notificationDisplayDuration) private var notificationDisplayDuration
     @EnvironmentObject var vm: BoringViewModel
     @Default(.inlineHUD) var inlineHUD
     @Default(.enableGradient) var enableGradient
@@ -630,6 +631,8 @@ struct HUD: View {
     @Default(.hudReplacement) var hudReplacement
     @ObservedObject var coordinator = BoringViewCoordinator.shared
     @State private var accessibilityAuthorized = false
+    @AppStorage(NotificationMirroringPreferences.enabledKey) private var mirrorVisibleNotifications = false
+    @State private var notificationMirroringStatus = ""
     
     var body: some View {
         Form {
@@ -643,10 +646,13 @@ struct HUD: View {
                 Stepper(value: $downloadHintDuration, in: 0.5...10, step: 0.5) {
                     LabeledContent("下载提示", value: "\(String(format: "%.1f", downloadHintDuration)) 秒")
                 }
+                Stepper(value: $notificationDisplayDuration, in: 1...30, step: 1) {
+                    LabeledContent("通知停留时间", value: "\(Int(notificationDisplayDuration)) 秒")
+                }
                 Text("调整灵动岛临时提示的自动收起时间，不影响 AI 会话提醒或下载任务本身。新的时间会在下一次提示时生效。")
                     .font(.footnote).foregroundStyle(.secondary)
                 Button("恢复默认") {
-                    Defaults.reset(.compactHUDDuration, .expandedHUDDuration, .downloadHintDuration)
+                    Defaults.reset(.compactHUDDuration, .expandedHUDDuration, .downloadHintDuration, .notificationDisplayDuration)
                 }
             }
 
@@ -688,6 +694,32 @@ struct HUD: View {
                     }
                     .padding(.top, 6)
                 }
+            }
+
+            Section {
+                Toggle("Show visible banners in the notch", isOn: $mirrorVisibleNotifications)
+                    .onChange(of: mirrorVisibleNotifications) { _, enabled in
+                        updateNotificationMirroring(enabled: enabled)
+                    }
+
+                Defaults.Toggle("点击通知尝试跳转到对应聊天", key: .notificationJumpToConversation)
+                    .disabled(!mirrorVisibleNotifications)
+
+                if !notificationMirroringStatus.isEmpty {
+                    Text(notificationMirroringStatus)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Notifications")
+            } footer: {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("通过辅助功能读取屏幕上可见的通知横幅，确认收到后尝试收起原横幅。通知显示在灵动岛底部，有歌词时显示在歌词下方。通知内容仅保留在内存中，不会保存。")
+                    Text("开启聊天跳转后，会短暂打开通知中心，可能出现闪烁。原横幅收起后，通知可能不再保留在通知中心，因此跳转不保证成功；找不到原通知、通知被折叠或无法唯一匹配时，只打开来源应用。")
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
             
             Section {
@@ -758,6 +790,12 @@ struct HUD: View {
         .navigationTitle("HUDs")
         .task {
             accessibilityAuthorized = await XPCHelperClient.shared.isAccessibilityAuthorized()
+            if mirrorVisibleNotifications, accessibilityAuthorized {
+                let started = await XPCHelperClient.shared.startNotificationBannerMonitoring()
+                notificationMirroringStatus = started ? "正在监听桌面通知横幅。" : "无法启动横幅监听，请检查辅助功能权限。"
+            } else if mirrorVisibleNotifications {
+                notificationMirroringStatus = "通知镜像需要辅助功能权限，请点击上方按钮授权。"
+            }
         }
         .onAppear {
             XPCHelperClient.shared.startMonitoringAccessibilityAuthorization()
@@ -768,7 +806,39 @@ struct HUD: View {
         .onReceive(NotificationCenter.default.publisher(for: .accessibilityAuthorizationChanged)) { notification in
             if let granted = notification.userInfo?["granted"] as? Bool {
                 accessibilityAuthorized = granted
+                guard mirrorVisibleNotifications else { return }
+                Task { @MainActor in
+                    if granted {
+                        let started = await XPCHelperClient.shared.startNotificationBannerMonitoring()
+                        notificationMirroringStatus = started ? "正在监听桌面通知横幅。" : "无法启动横幅监听，请检查辅助功能权限。"
+                    } else {
+                        await XPCHelperClient.shared.stopNotificationBannerMonitoring()
+                        notificationMirroringStatus = "通知镜像需要辅助功能权限。"
+                    }
+                }
             }
+        }
+    }
+
+    private func updateNotificationMirroring(enabled: Bool) {
+        Task { @MainActor in
+            guard enabled else {
+                await XPCHelperClient.shared.stopNotificationBannerMonitoring()
+                BoringViewCoordinator.shared.clearMirroredNotification()
+                notificationMirroringStatus = ""
+                return
+            }
+
+            let granted = await XPCHelperClient.shared.isAccessibilityAuthorized()
+            accessibilityAuthorized = granted
+            guard granted else {
+                XPCHelperClient.shared.requestAccessibilityAuthorization()
+                notificationMirroringStatus = "请在上方授予辅助功能权限，并保持通知镜像开启。"
+                return
+            }
+
+            let started = await XPCHelperClient.shared.startNotificationBannerMonitoring()
+            notificationMirroringStatus = started ? "正在监听桌面通知横幅。" : "无法启动横幅监听，请检查辅助功能权限。"
         }
     }
 }
@@ -869,7 +939,18 @@ struct Media: View {
                         customBadge(text: "Beta")
                     }
                 }
+                .onChange(of: enableLyrics) { _, isEnabled in
+                    if !isEnabled {
+                        showCollapsedLyrics = false
+                    }
+                }
                 Toggle("Show lyrics below the notch when collapsed", isOn: $showCollapsedLyrics)
+                    .disabled(!enableLyrics)
+                    .onAppear {
+                        if !enableLyrics {
+                            showCollapsedLyrics = false
+                        }
+                    }
                     .onChange(of: showCollapsedLyrics) { _, _ in
                         MusicManager.shared.refreshLyricsIfAvailable()
                     }
